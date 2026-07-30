@@ -848,3 +848,195 @@ Plus **tools integration** — every phase references the relevant tools from th
 - USDA FoodData Central: https://fdc.nal.usda.gov/
 - Open-Meteo Weather: https://open-meteo.com/
 - LibreTranslate: https://libretranslate.com/
+
+
+---
+
+## Codebase Critique — Technical Debt & Risk Register
+
+> Produced by full source-read of `backend/app/`, `backend/tests/`, `.github/workflows/ci.yml`, and `frontend/`. Findings are ordered by severity within each category.
+
+---
+
+### 1. Security
+
+**1.1 — MFA bypass in `auth_service.py` (CRITICAL)**
+`verify_mfa_token()` unconditionally sets `valid = True` for `mfa_type in ("email", "phone")`. Any user who triggers email/phone MFA can pass any code and receive a full JWT. Biometric verification (`verify_biometric_assertion()`) is a stub that always returns `True`. Both features are exposed in the live API.
+
+**1.2 — CORS wildcard with `allow_credentials=True` (`main.py:47-53`)**
+`allow_origins=["*"]` combined with `allow_credentials=True` is rejected by browsers for credentialed requests but accepted by tools like Postman. The real risk is future frontend code that relies on this combination — it will silently fail in production. Lock origins to `SITE_URL` before go-live.
+
+**1.3 — `SECRET_KEY` defaults to `"change-me"` (`config.py`)**
+If the environment variable is unset, every JWT issued is cryptographically identical and can be forged by anyone who reads this repository. There is no startup assertion that `SECRET_KEY != "change-me"` in production. `Settings` is a plain class, not `pydantic-settings BaseSettings`, so there is no built-in validation or required-field enforcement.
+
+**1.4 — Apple SSO uses `SECRET_KEY` as client secret and skips JWT signature verification (`auth_service.py:~200`)**
+`verify_social_token()` passes `settings.SECRET_KEY` as the Apple `client_secret` (wrong — Apple requires a signed ES256 key) and then decodes the returned `id_token` with `options={"verify_signature": False}`. Any token payload claiming any email would authenticate as that user.
+
+**1.5 — API key rate-limit store is process-local (`api_key_middleware.py:8`)**
+`_rate_limit_store: dict[str, list[float]]` is a module-level dictionary. It is zeroed on every restart and is not shared between Gunicorn worker processes. On Render with multiple workers, each worker maintains its own counter — a single key gets N× the configured limit for N workers. The middleware also silently swallows all non-HTTP exceptions (`except Exception: pass`), meaning database errors during key lookup result in unlimited unmetered access.
+
+**1.6 — API keys are scoped per-user but not enforced per-user (`developer_portal.py`)**
+`GET /developer/api-keys` returns all keys from all users (`select(ApiKey)` with no filter). Any authenticated user can see and attempt to revoke keys created by other users. Deletion also does not verify ownership — any user can revoke any key by guessing the integer ID.
+
+**1.7 — Public certificate endpoints expose supply-chain data without auth**
+`GET /certificates/by-item/{item_id}`, `GET /certificates/verify-chain/{item_id}`, `GET /certificates/missing/{item_id}`, `GET /certificates/{id}`, and the full certificate request list/detail endpoints have no `Depends(get_current_user)`. Competitor intelligence, recall status, and missing-cert gaps are openly readable.
+
+**1.8 — Telemetry ingest endpoint has no authentication (`routes/telemetry.py`)**
+`POST /api/v1/telemetry/ingest` accepts arbitrary sensor readings without any auth guard. An attacker can flood the database with fake temperature/shock data or trigger alert notifications at will.
+
+**1.9 — WebSocket channel endpoint has no authentication (`routes/events.py`)**
+`WS /api/v1/events/ws/{channel}` calls `websocket.accept()` before any identity check. Any unauthenticated client can subscribe to any internal event channel, including `cargo.status.changed` and `batch.recalled`.
+
+**1.10 — Event logs endpoint has no authentication (`routes/events.py`)**
+`GET /api/v1/events/logs` is open with no `get_current_user` dependency.
+
+**1.11 — Recall read endpoints are fully public (`routes/recalls.py`)**
+`GET /recalls`, `GET /recalls/{id}`, and `GET /recalls/{id}/trace` have no auth guard. Active recall details, affected batch IDs, and shipment traces are publicly readable.
+
+**1.12 — ESG summary and per-item data are public (`routes/esg.py`)**
+`GET /esg/items/{item_id}` and `GET /esg/summary` have no auth guard.
+
+**1.13 — `monitoring/metrics` and `monitoring/sla` are fully public (`routes/monitoring.py`)**
+Internal table row counts, unacknowledged alert counts, active recall counts, and SLA error rates are exposed to the internet without authentication.
+
+---
+
+### 2. Architecture & Design
+
+**2.1 — `init_db()` creates tables on startup, bypassing Alembic**
+`database.py:init_db()` calls `Base.metadata.create_all` on every startup. This means any model added without a migration file will silently be created by the ORM, diverging from the Alembic-managed schema. In a PostgreSQL production environment this causes schema drift that is invisible to `alembic current`. Either remove `create_all` or restrict it to SQLite dev mode only.
+
+**2.2 — `Settings` is a plain class, not `pydantic-settings BaseSettings`**
+Configuration is read once at import time from `os.getenv`. There is no type coercion, no validation, no required-field check, and no `.env` file loading for tests. Changing an env var after import has no effect. Migrating to `pydantic-settings` gives free validation, casting, and `Field(...)` required enforcement.
+
+**2.3 — All routes use query parameters for POST/PATCH bodies**
+`POST /suppliers`, `POST /insurance/policies`, `POST /recalls`, `POST /retention/policies`, `PATCH /telemetry/alerts/{id}/acknowledge`, and others accept data exclusively via `Query(...)` rather than a Pydantic request body. Query strings are logged in access logs, server logs, and browser history. Policy numbers, coverage amounts, recall reasons, and device IDs are therefore written into log files in plain text. This also breaks standard REST conventions and makes Swagger UI harder to use correctly.
+
+**2.4 — Tenant isolation is declared but not enforced at query level**
+`tenant_id` foreign keys exist on most models, but service layer queries (`list_suppliers`, `list_policies`, `list_recalls`, `list_claims`, `get_supplier_ranking`, etc.) use bare `select(Model)` with no `.where(Model.tenant_id == user.tenant_id)` filter. All tenants see each other's data. The middleware dependency `get_current_tenant()` is referenced in `pending.md` as built but is not wired into any route.
+
+**2.5 — Retention service uses raw SQL string interpolation (`retention_service.py`)**
+`run_archival()` builds SQL via f-string: `f"CREATE TABLE IF NOT EXISTS {archive_table}"` and `f"DELETE FROM {table_name}"`. `table_name` comes from `ArchivePolicy.entity_type`, which is an admin-controlled string stored in the database. Any admin who creates a policy with `entity_type = "users; DROP TABLE users; --"` will execute that SQL. This is a SQL injection vulnerability, even if restricted to admins.
+
+**2.6 — `get_supplier_ranking()` performs N+1 queries**
+For each scorecard row returned (up to 50), the function calls `await db.get(Supplier, s.supplier_id)` in a loop. This is 1 + up to 50 sequential round-trips. Use a JOIN or `selectinload` instead.
+
+**2.7 — `monitoring_service.get_metrics()` uses synchronous `inspect` on an async engine**
+`sa_inspect(db.bind)` calls `inspect()` on the async engine's underlying sync bind — this is undefined behaviour in SQLAlchemy's async API and will raise `MissingGreenlet` or `AttributeError` depending on the async driver version. The correct approach is to use `run_sync` with a synchronous connection or avoid reflection entirely.
+
+**2.8 — SLA error rate calculation counts all requests as errors (`monitoring_service.py:46`)**
+`errors_recent = sum(1 for r in _request_timestamps if r["time"] >= cutoff)` iterates over `_request_timestamps` and counts all entries in the window — not just 5xx errors. `record_request()` only stores `{"time": ..., "duration_ms": ...}` without a status code field. The error rate will always equal the request rate (100% error rate), making the SLA dashboard misleading.
+
+---
+
+### 3. Data Model
+
+**3.1 — `Supplier.is_active` is `String(1)` defaulting to `"Y"` instead of `Boolean`**
+The model column is `Column(String(1), default="Y")` while every other `is_active` flag across the codebase is `Boolean`. Filtering `is_active == True` will fail silently because `"Y" != True`. Queries using this column need the workaround `is_active == "Y"`.
+
+**3.2 — `Supplier.contact_email` has no uniqueness constraint or validation**
+There is no database-level unique constraint and no Pydantic `EmailStr` validation on the contact email field. Duplicate suppliers with the same email can be created without error.
+
+**3.3 — `SupplierScorecard.period` is a raw `String(20)` with no validation or format enforcement**
+Nothing prevents `period` values like `"Q1"`, `"Q1-2024"`, `"2024-Q1"`, and `"January"` coexisting for the same supplier, making period-over-period comparison and ranking unreliable.
+
+**3.4 — `InsuranceClaim.documents_json` stores a JSON list as a plain `Text` column**
+The field is populated with `json.dumps(documents)` and never decoded on read — the serialized string `'["doc1.pdf", "doc2.pdf"]'` is returned raw in API responses. Use SQLAlchemy's `JSON` column type or a dedicated junction table.
+
+**3.5 — `User.updated_at` has no `server_default`**
+`updated_at = Column(DateTime(timezone=True), onupdate=func.now())` has no default value, so newly created users have `updated_at = NULL` until first update. `created_at` uses `server_default=func.now()` correctly; `updated_at` should too.
+
+**3.6 — Missing database indexes on high-frequency query columns**
+Columns used in common filter queries have no explicit index:
+- `Certificate.expiry_date` (queried in `notify_expiring_certificates` and `get_metrics`)
+- `TelemetryAlert.acknowledged` (queried in `list_alerts` and `get_metrics`)
+- `Recall.status` (queried in `list_recalls` and `get_metrics`)
+- `InsuranceClaim.status`
+- `SupplierScorecard.overall_score`
+
+---
+
+### 4. Testing
+
+**4.1 — Test coverage numbers are almost certainly inflated**
+The CI command is `pytest --cov=app` (covers all of `app/`). The test files exercise only: `/health`, `/metrics`, `/sla`, certificate issue/list/get/notify, cargo register/detail/status, and the certificate request flow. The following domains have zero test coverage: auth, search, products, traceability, batches, warehouses, shipments, inventory, item movements, compliance, rates, enrichment, events, telemetry, developer portal, tiers, suppliers, recalls, insurance, ESG, retention, and all 20 tool modules. The 70% gate is almost certainly not currently passing and would not catch regressions in critical paths.
+
+**4.2 — `test_services/test_certificate_service.py` is an empty file**
+The file exists on disk but contains no test code. The same is true of the entire `test_services/` and `test_tools/` directories based on the CI run output. `pending.md` claims 16 certificate service tests — they do not exist.
+
+**4.3 — Test client is always authenticated as admin**
+The `client` fixture injects an admin token in every request header. No test ever verifies that unauthenticated requests return 401, or that a viewer-role user cannot access admin-only routes. The current suite cannot catch the public-endpoint auth regressions identified in §1 above.
+
+**4.4 — Tests use SQLite, CI uses PostgreSQL — schema divergence is undetected**
+`conftest.py` uses `sqlite+aiosqlite://` while `ci.yml` runs tests against PostgreSQL. The Alembic migrations include PostgreSQL-specific DDL (CTEs with `RETURNING`, `LIKE table INCLUDING ALL` in retention). These will not be validated in local test runs. SQLite also silently ignores foreign key constraints by default, meaning referential integrity bugs pass locally.
+
+**4.5 — `scope="session"` event loop fixture is deprecated**
+The `event_loop` fixture with `scope="session"` is deprecated as of `pytest-asyncio` 0.21 and raises a warning on the current installed version (0.24). It should be replaced with `asyncio_mode = "auto"` in `pytest.ini` or `pyproject.toml`.
+
+---
+
+### 5. Operational Gaps
+
+**5.1 — No rate limiting on any public endpoint**
+The API key rate limiter only fires when an `X-API-Key` header is present. Public endpoints — `/health`, `/verify/{code}`, `GET /search`, `POST /auth/login`, `POST /auth/register`, and all unauthenticated certificate/recall/ESG endpoints — have no rate limiting at all. Login is brute-forceable without any throttling.
+
+**5.2 — No request body size limit**
+FastAPI / Starlette defaults allow arbitrarily large request bodies. A malicious client can POST a multi-GB payload to any JSON-accepting endpoint, exhausting memory before any route handler runs. Add a `ContentSizeLimitMiddleware` or set `--limit-request-body` in Gunicorn.
+
+**5.3 — SLA and metrics state is lost on every restart**
+`_request_timestamps`, `_error_count`, and `_total_requests` in `monitoring_service.py` are in-process module globals. Every deploy, crash, or worker restart resets the SLA dashboard to zero. These should be persisted to a `RequestMetric` table or Redis.
+
+**5.4 — No background task queue**
+Webhook delivery (`_deliver_webhooks()`), certificate expiry notifications, telemetry alert emails, and recall notifications are all executed synchronously inside request handlers or as `asyncio.create_task` fire-and-forget calls. A failed webhook delivery has no retry logic. A slow SMTP server will block the request thread. Use Celery, ARQ, or FastAPI's `BackgroundTasks` with a persistent queue.
+
+**5.5 — No request ID / correlation ID in logs**
+The structured JSON log in `main.py` includes method, path, status, duration, and client IP, but no `request_id` or `trace_id`. Correlating a single user's request across log lines is impossible. Add a `X-Request-ID` header injection middleware.
+
+**5.6 — `asyncpg` is not in `requirements.txt`**
+The production `DATABASE_URL` on Render uses `postgresql+asyncpg://`, but `asyncpg` is not listed as a dependency. This will cause an `ImportError` on first deploy. Add `asyncpg>=0.29.0` to `requirements.txt`.
+
+---
+
+### 6. Code Quality
+
+**6.1 — Widespread use of Query parameters for write operations**
+Covered in §2.3, but also a code quality concern: it produces extremely long function signatures (17 parameters in `create_policy`), makes the Swagger UI show all fields as URL parameters rather than a request body, and makes copy-paste errors between route and service layer signatures very likely.
+
+**6.2 — `import __import__("datetime")` inside middleware**
+`api_key_middleware.py` contains `api_key.last_used_at = __import__("datetime").datetime.now(...)` — a string-based dynamic import inside a hot middleware path on every authenticated request. Import `datetime` at the top of the file.
+
+**6.3 — Hardcoded external service URLs in `auth_service.py`**
+`"https://api.your-email-service.com/send"` and `"https://api.your-sms-gateway.com/send"` are placeholder strings committed to source. Calling these endpoints in production will silently fail (the `except Exception: pass` swallows the error), meaning MFA codes are never actually sent — but the flow continues as if they were.
+
+**6.4 — All datetime serialisation uses `str(datetime)` instead of `.isoformat()`**
+Throughout service files (`insurance_service.py`, `supplier_service.py`, `cargo_service.py`, etc.), datetimes are serialised as `str(created_at)`. This produces Python's default `repr` format (`2024-07-30 14:23:01.123456+00:00`) rather than ISO 8601 (`2024-07-30T14:23:01.123456+00:00`). Frontend code and API consumers expecting a standard format will need workarounds. Use `.isoformat()` or Pydantic response schemas.
+
+**6.5 — No Pydantic response schemas on any endpoint**
+Every route returns raw `dict` constructions. There are no `response_model=` declarations on any router decorator. This means: Swagger UI shows no response schema, sensitive fields can leak if a dict key is accidentally added, and no serialisation validation occurs on outbound data. Defining response schemas also forces the team to think about what each endpoint actually contracts to return.
+
+**6.6 — `conftest.py` leaks a `test_foodtrack.db` SQLite file**
+The test database is created at `./test_foodtrack.db` (relative to the working directory). It is not cleaned up between CI runs and is not in `.gitignore`. If tests are run from `backend/`, the file accumulates in the repo.
+
+---
+
+### 7. Immediate Priorities (Pre-Production Checklist)
+
+These items block a safe go-live regardless of feature completeness.
+
+| # | Item | File | Severity |
+|---|------|------|----------|
+| P1 | Fix MFA bypass — email/phone codes must be validated, not auto-passed | `auth_service.py` | Critical |
+| P2 | Remove `verify_biometric_assertion` stub — gate with `NotImplementedError` or feature flag | `auth_service.py` | Critical |
+| P3 | Add `Depends(get_current_user)` to telemetry ingest, WS channel, event logs, recall reads, certificate reads, ESG summary, and metrics/SLA | Multiple routes | Critical |
+| P4 | Fix tenant query isolation — scope all `select()` calls with `tenant_id` filter | Multiple services | Critical |
+| P5 | Fix `asyncpg` missing from `requirements.txt` | `requirements.txt` | Critical |
+| P6 | Fix `Supplier.is_active` column type from `String(1)` to `Boolean` | `models/supplier.py` + migration | High |
+| P7 | Fix SLA error rate calculation — store status code in `_request_timestamps` | `monitoring_service.py` | High |
+| P8 | Fix API key list/delete — scope to `created_by == user.id` | `routes/developer_portal.py` | High |
+| P9 | Replace query-string POST bodies with Pydantic request schemas | All write routes | High |
+| P10 | Add `asyncio_mode = "auto"` to pytest config and fix deprecated event loop fixture | `conftest.py` | Medium |
+| P11 | Move `TIER_FEATURES` dict and `require_tier()` to a dedicated `services/tier_service.py` — currently in routes | `routes/tiers.py` | Medium |
+| P12 | Add `asyncpg` and pin it; validate all requirements against Python 3.12 | `requirements.txt` | Medium |
+| P13 | Replace SQL string interpolation in `retention_service.run_archival()` with a whitelist of allowed table names | `retention_service.py` | High |
+| P14 | Add `SECRET_KEY` startup guard — raise on boot if value equals `"change-me"` | `config.py` | High |
+| P15 | Restrict CORS origins to `SITE_URL` | `main.py` | Medium |
