@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Boolean
+
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Boolean, Index
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 import enum
 
 from app.database import Base
@@ -40,6 +42,10 @@ class TelemetryReading(Base):
 
 class TelemetryAlert(Base):
     __tablename__ = "telemetry_alerts"
+    __table_args__ = (
+        # Index on acknowledged: used heavily in list_alerts and get_metrics
+        Index("ix_telemetry_alerts_acknowledged", "acknowledged"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)

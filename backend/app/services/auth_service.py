@@ -53,6 +53,8 @@ async def register_user(db: AsyncSession, email: str, password: str, full_name: 
     existing = await db.execute(select(User).where(User.email == email))
     if existing.scalar_one_or_none():
         raise ValueError("Email already registered")
+    if len(password) < 8:
+        raise ValueError("Password must be at least 8 characters")
     user = User(
         email=email, full_name=full_name, company=company, phone=phone,
         hashed_password=hash_password(password), role=UserRole.ENTERPRISE,
@@ -98,9 +100,23 @@ async def verify_mfa_token(db: AsyncSession, temp_token: str, code: str) -> tupl
     mfa_type = payload.get("mfa_type")
     valid = False
     if mfa_type == "totp" and user.totp_secret:
-        valid = pyotp.TOTP(user.totp_secret).verify(code)
-    elif mfa_type in ("email", "phone"):
-        valid = True
+        # Verify TOTP code using pyotp (time-based, 30s window)
+        valid = pyotp.TOTP(user.totp_secret).verify(code, valid_window=1)
+    elif mfa_type == "email":
+        # Verify signed OTP token stored on the user record
+        if user.mfa_otp_token:
+            valid = verify_email_otp(user.mfa_otp_token, code)
+            if valid:
+                # Consume the token so it cannot be reused
+                user.mfa_otp_token = None
+                await db.commit()
+    elif mfa_type == "phone":
+        # Verify signed OTP token stored on the user record
+        if user.mfa_otp_token:
+            valid = verify_email_otp(user.mfa_otp_token, code)
+            if valid:
+                user.mfa_otp_token = None
+                await db.commit()
     if not valid:
         raise ValueError("Invalid MFA code")
     token = create_access_token({"sub": str(user.id), "role": user.role.value, "tenant_id": user.tenant_id})
@@ -118,7 +134,7 @@ def get_totp_provisioning_uri(secret: str, email: str) -> str:
 
 
 def verify_totp_code(secret: str, token: str) -> bool:
-    return pyotp.TOTP(secret).verify(token)
+    return pyotp.TOTP(secret).verify(token, valid_window=1)
 
 
 async def enable_totp(user: User, db: AsyncSession) -> dict:
@@ -154,11 +170,22 @@ def verify_email_otp(token: str, expected_code: str, max_age: int = 600) -> bool
 
 
 async def send_email_otp(email: str, code: str) -> bool:
+    """Send a 6-digit OTP via the configured email service.
+
+    Requires EMAIL_API_URL and EMAIL_API_KEY to be set in environment.
+    Returns False (without raising) if the service is not configured.
+    """
+    if not settings.EMAIL_API_URL:
+        return False
     try:
+        headers = {}
+        if settings.EMAIL_API_KEY:
+            headers["Authorization"] = f"Bearer {settings.EMAIL_API_KEY}"
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
-                "https://api.your-email-service.com/send",
-                json={"to": email, "subject": "FoodTrack Verification", "text": f"Your code: {code}"},
+                settings.EMAIL_API_URL,
+                json={"to": email, "subject": "FoodTrack Verification Code", "text": f"Your verification code: {code}"},
+                headers=headers,
             )
             return resp.is_success
     except Exception:
@@ -172,11 +199,22 @@ def generate_phone_otp() -> str:
 
 
 async def send_sms_otp(phone: str, code: str) -> bool:
+    """Send a 6-digit OTP via the configured SMS gateway.
+
+    Requires SMS_API_URL and SMS_API_KEY to be set in environment.
+    Returns False (without raising) if the service is not configured.
+    """
+    if not settings.SMS_API_URL:
+        return False
     try:
+        headers = {}
+        if settings.SMS_API_KEY:
+            headers["Authorization"] = f"Bearer {settings.SMS_API_KEY}"
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
-                "https://api.your-sms-gateway.com/send",
+                settings.SMS_API_URL,
                 json={"to": phone, "text": f"FoodTrack verification code: {code}"},
+                headers=headers,
             )
             return resp.is_success
     except Exception:
@@ -186,6 +224,10 @@ async def send_sms_otp(phone: str, code: str) -> bool:
 # --- SSO ---
 
 async def verify_social_token(provider: str, token: str) -> dict | None:
+    """Verify a social login token. Apple SSO is not fully implemented —
+    it requires a proper ES256 client secret and a signed JWT verification
+    library (e.g. python-jwt with Apple's public keys). Raises NotImplementedError
+    for Apple until those are configured."""
     try:
         if provider == "google":
             async with httpx.AsyncClient(timeout=10) as client:
@@ -197,16 +239,13 @@ async def verify_social_token(provider: str, token: str) -> dict | None:
                     data = resp.json()
                     return {"email": data["email"], "name": data.get("name", ""), "id": data["sub"]}
         elif provider == "apple":
-            async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.post(
-                    "https://appleid.apple.com/auth/token",
-                    data={"client_id": "com.foodtrack", "client_secret": settings.SECRET_KEY,
-                          "grant_type": "authorization_code", "code": token},
-                )
-                if resp.is_success:
-                    data = resp.json()
-                    decoded = jwt.decode(data.get("id_token", ""), options={"verify_signature": False})
-                    return {"email": decoded.get("email", ""), "name": decoded.get("name", ""), "id": decoded["sub"]}
+            raise NotImplementedError(
+                "Apple SSO requires an ES256 private key and signed client_secret. "
+                "Configure APPLE_CLIENT_ID, APPLE_TEAM_ID, and APPLE_KEY_ID env vars "
+                "and implement proper id_token signature verification before enabling."
+            )
+    except NotImplementedError:
+        raise
     except Exception:
         pass
     return None
@@ -217,6 +256,8 @@ async def sso_login_or_register(db: AsyncSession, provider: str, token: str) -> 
     if not profile:
         raise ValueError("SSO verification failed")
     email = profile.get("email", "")
+    if not email:
+        raise ValueError("SSO provider did not return an email address")
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
     if not user:
@@ -228,8 +269,8 @@ async def sso_login_or_register(db: AsyncSession, provider: str, token: str) -> 
         db.add(user)
         await db.commit()
         await db.refresh(user)
-    token = create_access_token({"sub": str(user.id), "role": user.role.value, "tenant_id": user.tenant_id})
-    return user, token
+    jwt_token = create_access_token({"sub": str(user.id), "role": user.role.value, "tenant_id": user.tenant_id})
+    return user, jwt_token
 
 
 # --- WebAuthn / Biometrics ---
@@ -239,7 +280,13 @@ def generate_biometric_challenge() -> str:
 
 
 def verify_biometric_assertion(credential_id: str, public_key: str, assertion_data: dict) -> bool:
-    return True
+    """Stub — WebAuthn assertion verification requires a proper FIDO2 library
+    (e.g. py_webauthn). This function must not be called in production until
+    a real implementation is in place."""
+    raise NotImplementedError(
+        "WebAuthn biometric assertion verification is not implemented. "
+        "Integrate py_webauthn and configure relying-party origin before enabling."
+    )
 
 
 async def get_user_by_biometric_credential(db: AsyncSession, credential_id: str) -> User | None:
@@ -282,10 +329,10 @@ async def list_users(db: AsyncSession, page: int = 1) -> dict:
         result.append({
             "id": u.id, "email": u.email, "full_name": u.full_name,
             "company": u.company, "phone": u.phone,
-            "role": u.role.value if hasattr(u.role, 'value') else str(u.role),
+            "role": u.role.value if hasattr(u.role, "value") else str(u.role),
             "is_active": u.is_active, "email_verified": u.email_verified,
             "totp_enabled": u.totp_enabled,
-            "created_at": str(u.created_at) if u.created_at else None,
+            "created_at": u.created_at.isoformat() if u.created_at else None,
         })
     return {"users": result, "total": total, "page": page, "total_pages": max(1, (total + PAGE_SIZE_USERS - 1) // PAGE_SIZE_USERS)}
 

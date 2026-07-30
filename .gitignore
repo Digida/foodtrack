@@ -34,6 +34,9 @@ Thumbs.db
 .cache/
 htmlcov/
 .coverage
+test_foodtrack.db
+test_foodtrack.db-wal
+test_foodtrack.db-shm
 
 # Logs
 *.log

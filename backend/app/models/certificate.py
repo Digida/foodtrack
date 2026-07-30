@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Enum as SAEnum, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Index
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
@@ -45,6 +46,10 @@ class CertificateType(str, enum.Enum):
 
 class Certificate(Base):
     __tablename__ = "certificates"
+    __table_args__ = (
+        # Index on expiry_date: used by notify_expiring_certificates and get_metrics
+        Index("ix_certificates_expiry_date", "expiry_date"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     certificate_id = Column(String(100), unique=True, index=True, nullable=False)

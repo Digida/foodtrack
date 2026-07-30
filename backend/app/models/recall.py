@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Enum as SAEnum
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Index
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import relationship
 import enum
 
@@ -22,6 +23,9 @@ class RecallStatus(str, enum.Enum):
 
 class Recall(Base):
     __tablename__ = "recalls"
+    __table_args__ = (
+        Index("ix_recalls_status", "status"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)

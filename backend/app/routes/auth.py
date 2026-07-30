@@ -4,14 +4,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User, UserRole
+from app.schemas import (
+    TokenResponse, UserDetailResponse, UserListResponse, OKResponse,
+)
 from app.services.auth_service import (
     register_user, authenticate_user, verify_mfa_token,
     enable_totp, confirm_totp,
     generate_email_otp, generate_phone_otp,
     send_email_otp, send_sms_otp,
     sso_login_or_register,
-    generate_biometric_challenge, verify_biometric_assertion,
-    get_user_by_biometric_credential,
+    generate_biometric_challenge,
     update_profile, change_password,
     list_users, get_user_by_id, update_user_role, toggle_user_active,
 )
@@ -131,24 +133,28 @@ async def biometric_challenge(user: User = Depends(get_current_user)):
 
 # ─── Authenticated User Endpoints ─────────────────────────────
 
-@router.get("/me")
+@router.get("/me", response_model=UserDetailResponse)
 async def get_me(user: User = Depends(get_current_user)):
-    return {"id": user.id, "email": user.email, "name": user.full_name,
-            "company": user.company, "role": user.role.value, "phone": user.phone}
+    return {"id": user.id, "email": user.email, "full_name": user.full_name,
+            "company": user.company, "role": user.role.value, "phone": user.phone,
+            "is_active": user.is_active, "email_verified": user.email_verified,
+            "totp_enabled": user.totp_enabled}
 
 
-@router.put("/me")
+@router.put("/me", response_model=UserDetailResponse)
 async def update_me(req: UpdateProfileRequest, user: User = Depends(get_current_user),
                     db: AsyncSession = Depends(get_db)):
     try:
         updated = await update_profile(db, user, req.model_dump(exclude_unset=True))
-        return {"id": updated.id, "email": updated.email, "name": updated.full_name,
-                "company": updated.company, "role": updated.role.value, "phone": updated.phone}
+        return {"id": updated.id, "email": updated.email, "full_name": updated.full_name,
+                "company": updated.company, "role": updated.role.value, "phone": updated.phone,
+                "is_active": updated.is_active, "email_verified": updated.email_verified,
+                "totp_enabled": updated.totp_enabled}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/change-password")
+@router.post("/change-password", response_model=OKResponse)
 async def api_change_password(req: ChangePasswordRequest, user: User = Depends(get_current_user),
                                db: AsyncSession = Depends(get_db)):
     try:

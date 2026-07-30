@@ -30,8 +30,11 @@ class CertificateCreateRequest(BaseModel):
 
 
 @router.post("")
-async def api_issue_certificate(req: CertificateCreateRequest, user: User = Depends(get_current_user),
-                                 db: AsyncSession = Depends(get_db)):
+async def api_issue_certificate(
+    req: CertificateCreateRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     try:
         cert = await issue_certificate(
             db, user, req.product_id, req.type, req.issuing_body,
@@ -47,14 +50,19 @@ async def api_issue_certificate(req: CertificateCreateRequest, user: User = Depe
 async def api_list_certificates(
     status: CertificateStatus | None = None,
     type: CertificateType | None = None,
-    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     certs = await list_certificates(db, status, type)
     return {"certificates": [serialize_certificate(c) for c in certs]}
 
 
 @router.get("/{certificate_id}")
-async def api_get_certificate(certificate_id: str, db: AsyncSession = Depends(get_db)):
+async def api_get_certificate(
+    certificate_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     cert = await get_certificate(db, certificate_id)
     if not cert:
         raise HTTPException(status_code=404, detail="Certificate not found")
@@ -62,20 +70,26 @@ async def api_get_certificate(certificate_id: str, db: AsyncSession = Depends(ge
 
 
 @router.post("/{certificate_id}/verify-auth")
-async def api_verify_certificate(certificate_id: str, user: User = Depends(get_current_user),
-                                  db: AsyncSession = Depends(get_db)):
+async def api_verify_certificate(
+    certificate_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     try:
-        cert = await verify_certificate(db, user, certificate_id)
+        await verify_certificate(db, user, certificate_id)
         return {"status": "verified", "certificate_id": certificate_id}
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=400 if isinstance(e, ValueError) else 403, detail=str(e))
 
 
 @router.post("/{certificate_id}/revoke")
-async def api_revoke_certificate(certificate_id: str, user: User = Depends(get_current_user),
-                                  db: AsyncSession = Depends(get_db)):
+async def api_revoke_certificate(
+    certificate_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     try:
-        cert = await revoke_certificate(db, user, certificate_id)
+        await revoke_certificate(db, user, certificate_id)
         return {"status": "revoked"}
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=404 if isinstance(e, ValueError) else 403, detail=str(e))
@@ -84,6 +98,7 @@ async def api_revoke_certificate(certificate_id: str, user: User = Depends(get_c
 @router.get("/by-item/{item_id}")
 async def api_certificates_by_item(
     item_id: int,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     certs = await get_certificates_for_item(db, item_id)
@@ -93,6 +108,7 @@ async def api_certificates_by_item(
 @router.get("/verify-chain/{item_id}")
 async def api_verify_certificate_chain(
     item_id: int,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -106,6 +122,7 @@ async def api_verify_certificate_chain(
 async def api_missing_certifications(
     item_id: int,
     target_market: str = "dubai_import",
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -159,6 +176,7 @@ async def api_list_requests(
 @router.get("/requests/{request_id}")
 async def api_get_request(
     request_id: int,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     cr = await get_certificate_request(db, request_id)
@@ -177,12 +195,11 @@ async def api_review_request(
     try:
         cr = await review_certificate_request(db, user, request_id, req.decision, req.reviewer_notes)
 
-        # Auto-advance linked cargo to CERTIFIED when request is approved
         advance_result = None
         if req.decision == CertificateRequestStatus.APPROVED:
             try:
                 advance_result = await auto_advance_cargo_on_cert_approval(db, request_id)
-            except (ValueError, Exception):
+            except Exception:
                 pass
 
         return {

@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from app.config import settings
 from app.database import init_db
 from app.routes import (
     auth, products, traceability, certificates, analytics, share, contact, taxonomy,
@@ -46,9 +47,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="FoodTrack - Digital Trust Infrastructure", version="1.0.0", lifespan=lifespan)
 
+# CORS: restrict allowed origins to SITE_URL in production.
+# Supports comma-separated list via CORS_ORIGINS env var for multi-domain setups.
+import os as _os
+_raw_origins = _os.getenv("CORS_ORIGINS", settings.SITE_URL)
+_allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

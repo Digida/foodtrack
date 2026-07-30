@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -18,21 +19,43 @@ from app.utils.dependencies import get_current_user
 router = APIRouter(prefix="/insurance", tags=["insurance"])
 
 
+class PolicyCreateRequest(BaseModel):
+    item_id: int
+    policy_number: str = Field(..., min_length=1, max_length=100)
+    coverage_amount: float = Field(..., gt=0)
+    carrier: str | None = None
+    premium: float | None = Field(None, gt=0)
+    currency: str = Field("USD", min_length=3, max_length=3)
+    valid_from: str | None = None
+    valid_until: str | None = None
+
+
+class ClaimFileRequest(BaseModel):
+    policy_id: int
+    incident_type: str = Field(..., min_length=1, max_length=100)
+    claim_amount: float = Field(..., gt=0)
+    description: str | None = None
+    currency: str = Field("USD", min_length=3, max_length=3)
+    documents: list[str] | None = None
+
+
+class ClaimStatusUpdateRequest(BaseModel):
+    status: ClaimStatus
+
+
 @router.post("/policies")
 async def api_create_policy(
-    item_id: int = Query(...),
-    policy_number: str = Query(...),
-    coverage_amount: float = Query(...),
-    carrier: str | None = Query(None),
-    premium: float | None = Query(None),
-    currency: str = Query("USD"),
-    valid_from: str | None = Query(None),
-    valid_until: str | None = Query(None),
+    req: PolicyCreateRequest,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        policy = await create_policy(db, user, item_id, policy_number, coverage_amount, carrier, premium, currency, datetime.fromisoformat(valid_from) if valid_from else None, datetime.fromisoformat(valid_until) if valid_until else None)
+        policy = await create_policy(
+            db, user, req.item_id, req.policy_number, req.coverage_amount,
+            req.carrier, req.premium, req.currency,
+            datetime.fromisoformat(req.valid_from) if req.valid_from else None,
+            datetime.fromisoformat(req.valid_until) if req.valid_until else None,
+        )
         return {"id": policy.id, "policy_number": policy.policy_number}
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=400 if isinstance(e, ValueError) else 403, detail=str(e))
@@ -50,18 +73,15 @@ async def api_list_policies(
 
 @router.post("/claims")
 async def api_file_claim(
-    policy_id: int = Query(...),
-    incident_type: str = Query(...),
-    claim_amount: float = Query(...),
-    description: str | None = Query(None),
-    currency: str = Query("USD"),
-    documents: str | None = Query(None),
+    req: ClaimFileRequest,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        doc_list = documents.split(",") if documents else None
-        claim = await file_claim(db, user, policy_id, incident_type, claim_amount, description, currency, doc_list)
+        claim = await file_claim(
+            db, user, req.policy_id, req.incident_type,
+            req.claim_amount, req.description, req.currency, req.documents,
+        )
         return {"id": claim.id, "status": claim.status.value}
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=400 if isinstance(e, ValueError) else 403, detail=str(e))
@@ -80,12 +100,12 @@ async def api_list_claims(
 @router.patch("/claims/{claim_id}/status")
 async def api_update_claim(
     claim_id: int,
-    status: str = Query(...),
+    req: ClaimStatusUpdateRequest,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        claim = await update_claim_status(db, user, claim_id, ClaimStatus(status))
+        claim = await update_claim_status(db, user, claim_id, req.status)
         return {"id": claim.id, "status": claim.status.value}
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=400 if isinstance(e, ValueError) else 403, detail=str(e))

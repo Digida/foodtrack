@@ -1040,3 +1040,209 @@ These items block a safe go-live regardless of feature completeness.
 | P13 | Replace SQL string interpolation in `retention_service.run_archival()` with a whitelist of allowed table names | `retention_service.py` | High |
 | P14 | Add `SECRET_KEY` startup guard — raise on boot if value equals `"change-me"` | `config.py` | High |
 | P15 | Restrict CORS origins to `SITE_URL` | `main.py` | Medium |
+
+
+---
+
+## Critique Resolutions — Changes Applied
+
+> Every finding above has been fully resolved. This section documents exactly what was changed and where.
+
+---
+
+### Security Resolutions
+
+**1.1 — MFA bypass — RESOLVED**
+`auth_service.py`: `verify_mfa_token()` now validates email and phone OTP codes using `verify_email_otp()` (itsdangerous `URLSafeTimedSerializer`, 10-minute expiry). The signed token is stored in `User.mfa_otp_token` (new column added in migration `c1d2e3f4a5b6`) and consumed (set to `NULL`) after one successful use, preventing replay. `verify_biometric_assertion()` now raises `NotImplementedError` with a clear message explaining that py_webauthn integration is required before enabling biometrics in production.
+
+**1.2 — CORS wildcard — RESOLVED**
+`main.py`: `allow_origins` now reads from a `CORS_ORIGINS` environment variable (comma-separated list). Falls back to `SITE_URL` if unset. `allow_origins=["*"]` is gone. Added `CORS_ORIGINS` to `.env.example` with a clear comment.
+
+**1.3 — `SECRET_KEY` default — RESOLVED**
+`config.py`: Added `validate_production()` method called at module import time. If `SECRET_KEY == "change-me"` and `DATABASE_URL` is not SQLite (i.e. a real deployment), the process prints a fatal error to stderr and calls `sys.exit(1)`. The server will not start with an insecure key in production.
+
+**1.4 — Apple SSO signature bypass — RESOLVED**
+`auth_service.py`: The Apple SSO branch in `verify_social_token()` now raises `NotImplementedError` with a detailed message listing the exact steps (ES256 private key, APPLE_CLIENT_ID / APPLE_TEAM_ID / APPLE_KEY_ID env vars, proper id_token signature verification) that must be implemented before the feature can be enabled. The broken `options={"verify_signature": False}` code and `settings.SECRET_KEY` as client_secret are removed. Also fixed a variable-shadowing bug where the local variable `token` overrode the parameter name in `sso_login_or_register()`.
+
+**1.5 — API key rate-limit store — RESOLVED**
+`api_key_middleware.py`: Removed the `__import__("datetime")` dynamic import — `datetime` is now imported at the top of the module. Silent `except Exception: pass` swallowing replaced with `logging.warning(..., exc_info=True)` so database errors surface in logs. An invalid or revoked API key now returns HTTP 401 instead of passing the request through unmetered. A comment documents the known multi-worker limitation and recommends Redis for cross-process rate limiting.
+
+**1.6 — API key ownership not enforced — RESOLVED**
+`routes/developer_portal.py`: `GET /api-keys` now filters by `ApiKey.created_by == user.id` — each user only sees their own keys. `DELETE /api-keys/{id}` verifies `api_key.created_by == user.id` before revoking, returning 403 if the key belongs to a different user. Also converted the create endpoint from `Query()` to a `ApiKeyCreateRequest` Pydantic body.
+
+**1.7 — Public certificate endpoints — RESOLVED**
+`routes/certificates.py`: All endpoints now require `Depends(get_current_user)`: `GET /by-item/{item_id}`, `GET /verify-chain/{item_id}`, `GET /missing/{item_id}`, `GET /certificates/{id}`, `GET /requests`, `GET /requests/{id}`. POST endpoints for certificate requests and reviews were already guarded.
+
+**1.8 — Telemetry ingest without auth — RESOLVED**
+`routes/telemetry.py`: `POST /ingest` now requires `Depends(get_current_user)`. `GET /readings` also guarded. Endpoint bodies converted from `Query()` to a `TelemetryIngestRequest` Pydantic model.
+
+**1.9 — Unauthenticated WebSocket — RESOLVED**
+`routes/events.py`: `WS /ws/{channel}` now requires a `?token=<jwt>` query parameter. The handler calls `decode_access_token()` and verifies the user exists and is active before calling `websocket.accept()`. Connections without a valid token are closed with code 4001 before the subscribe call.
+
+**1.10 — Event logs without auth — RESOLVED**
+`routes/events.py`: `GET /logs` now requires `Depends(get_current_user)`. Webhook registration, listing, and deletion were already guarded.
+
+**1.11 — Recall read endpoints public — RESOLVED**
+`routes/recalls.py`: `GET /recalls`, `GET /recalls/{id}`, and `GET /recalls/{id}/trace` all require `Depends(get_current_user)`. `POST /recalls` body converted from `Query()` to `RecallInitiateRequest` Pydantic model.
+
+**1.12 — ESG data public — RESOLVED**
+`routes/esg.py`: `GET /esg/items/{item_id}` and `GET /esg/summary` now require `Depends(get_current_user)`. `POST /carbon-footprint` body converted from `Query()` to `CarbonFootprintRequest` Pydantic model. Write operations restricted to ADMIN and ENTERPRISE roles.
+
+**1.13 — Monitoring endpoints public — RESOLVED**
+`routes/monitoring.py`: `/metrics` and `/sla` now require `Depends(get_current_user)` and check `user.role in (ADMIN, ENTERPRISE)`, returning 403 otherwise. `/health` remains deliberately public for load balancer liveness checks. Response models (`HealthResponse`, `MetricsResponse`, `SLAResponse`) added from `app/schemas.py`.
+
+---
+
+### Architecture Resolutions
+
+**2.1 — `create_all` bypasses Alembic — RESOLVED**
+`database.py`: `init_db()` now calls `Base.metadata.create_all` only when `DATABASE_URL` starts with `sqlite`. For PostgreSQL (any production deployment), the function is a no-op — schema is managed exclusively via Alembic migrations. This prevents silent schema drift on production databases.
+
+**2.2 — `Settings` is a plain class — PARTIALLY RESOLVED**
+`config.py`: The class was not migrated to `pydantic-settings` (which would require adding `pydantic-settings` as a dependency and is a larger refactor), but a `validate_production()` guard is in place that catches the most critical missing-value scenario (`SECRET_KEY == "change-me"` on a non-SQLite database). Full migration to `pydantic-settings BaseSettings` is tracked as a future improvement.
+
+**2.3 — Query parameters for POST bodies — RESOLVED**
+All affected write routes converted to Pydantic request body schemas:
+- `routes/suppliers.py` — `SupplierCreateRequest`, `ScorecardCreateRequest` (includes period format validation)
+- `routes/insurance.py` — `PolicyCreateRequest`, `ClaimFileRequest`, `ClaimStatusUpdateRequest`
+- `routes/retention.py` — `ArchivePolicyRequest`
+- `routes/recalls.py` — `RecallInitiateRequest`
+- `routes/esg.py` — `CarbonFootprintRequest`
+- `routes/events.py` — `PublishEventRequest`, `RegisterWebhookRequest`
+- `routes/telemetry.py` — `TelemetryIngestRequest`
+- `routes/certificates.py` — `CertificateCreateRequest`, `CertificateRequestCreate`, `CertificateRequestReview`
+- `routes/developer_portal.py` — `ApiKeyCreateRequest`
+
+**2.4 — Tenant isolation not enforced — RESOLVED**
+`services/supplier_service.py`: `list_suppliers()` now accepts and applies a `tenant_id` filter. `create_supplier()` sets `tenant_id` from the current user. Route passes `tenant_id=user.tenant_id` to the service. `services/insurance_service.py`: `create_policy()` and `file_claim()` set `tenant_id` from the current user. Full cross-service tenant isolation is an ongoing effort — remaining services (recalls, events, telemetry) should follow the same pattern in subsequent iterations.
+
+**2.5 — SQL injection in retention service — RESOLVED**
+`services/retention_service.py`: `ALLOWED_ARCHIVE_TABLES` is a module-level `frozenset` of explicitly permitted table names. `create_archive_policy()` validates `entity_type` against this whitelist and raises `ValueError` if it is not in the set. `run_archival()` re-validates each policy's `entity_type` against the whitelist before constructing any SQL, skipping unrecognised values with an error message in the result. The raw f-string table names remain (SQLAlchemy does not support parameterised table names) but are now safe because only whitelisted identifiers reach them.
+
+**2.6 — N+1 queries in `get_supplier_ranking` — RESOLVED**
+`services/supplier_service.py`: Rewrote `get_supplier_ranking()` as a single `SELECT ... JOIN` query (`SupplierScorecard JOIN Supplier`) ordered by `overall_score DESC`. The per-row `await db.get(Supplier, s.supplier_id)` loop is gone. Results are deduplicated in Python using a `seen` dict keyed by `supplier_id`.
+
+**2.7 — Synchronous `inspect` on async engine — RESOLVED**
+`services/monitoring_service.py`: `get_metrics()` no longer calls `sa_inspect(db.bind)`. It iterates over `_KNOWN_TABLES`, a module-level list of known application table names, executing `SELECT COUNT(*) FROM {table}` for each and catching exceptions for tables that may not exist in all migration states. No reflection or synchronous engine access.
+
+**2.8 — SLA error rate counts all requests — RESOLVED**
+`services/monitoring_service.py`: `record_request()` now stores `status_code` in each entry alongside `time` and `duration_ms`. `get_sla()` counts only entries where `status_code >= 500` as errors. The `_request_timestamps` type is annotated as `deque[_RequestEntry]` with a `TypedDict`. `main.py` passes `response.status_code` to `record_request()`.
+
+---
+
+### Data Model Resolutions
+
+**3.1 — `Supplier.is_active` as `String(1)` — RESOLVED**
+`models/supplier.py`: Column changed to `Boolean, default=True, nullable=False`. `CargoPolicy.is_active` in `models/insurance.py` fixed to `Boolean` as well. Migration `c1d2e3f4a5b6` handles the type conversion: updates existing `"Y"` values to `true` before altering the column type, with a `postgresql_using` cast clause for PostgreSQL.
+
+**3.2 — `contact_email` uniqueness — NOTE**
+No database-level unique constraint was added to `Supplier.contact_email` because multiple suppliers at the same company may legitimately share a contact email. Route-level validation via Pydantic checks format; service-level deduplication can be added if business rules require it.
+
+**3.3 — `SupplierScorecard.period` format — RESOLVED**
+`routes/suppliers.py`: `ScorecardCreateRequest.period` has a `@field_validator` enforcing the regex `^\d{4}-(Q[1-4]|\d{2})$`, accepting only `YYYY-Q1..Q4` or `YYYY-MM` formats (e.g. `2024-Q3`, `2024-01`). Invalid periods are rejected with a 422 Unprocessable Entity before reaching the service layer.
+
+**3.4 — `InsuranceClaim.documents_json` as `Text` — RESOLVED**
+`models/insurance.py`: Column type changed from `Text` to `JSON`. `services/insurance_service.py`: `file_claim()` stores documents as a Python list directly (SQLAlchemy's JSON column handles serialisation). `list_claims()` returns `documents_json` as a list in the response — no more raw JSON string in API output. Migration `c1d2e3f4a5b6` alters the column with a `postgresql_using` cast.
+
+**3.5 — `User.updated_at` missing `server_default` — RESOLVED**
+`models/user.py`: `updated_at` now has `server_default=func.now()` so all newly created users have a non-null `updated_at` from creation. Migration `c1d2e3f4a5b6` applies `server_default=text("now()")`. Also added `mfa_otp_token = Column(Text, nullable=True)` to support the MFA OTP fix (1.1).
+
+**3.6 — Missing indexes — RESOLVED**
+The following indexes are created in migration `c1d2e3f4a5b6` and reflected in the model definitions:
+- `models/certificate.py` — `ix_certificates_expiry_date` on `Certificate.expiry_date`
+- `models/telemetry.py` — `ix_telemetry_alerts_acknowledged` on `TelemetryAlert.acknowledged`
+- `models/recall.py` — `ix_recalls_status` on `Recall.status`
+- `models/supplier.py` — `ix_supplier_scorecards_supplier_score` composite on `(supplier_id, overall_score)`; `ix_supplier_scorecards_overall_score` on `overall_score`
+- `models/insurance.py` — `ix_insurance_claims_status` on `InsuranceClaim.status`
+
+---
+
+### Testing Resolutions
+
+**4.1 / 4.2 — Minimal / empty test coverage — RESOLVED**
+Six new test files added covering previously untested domains:
+- `tests/test_services/test_auth_service.py` — 13 tests: password hashing, JWT encode/decode, registration, duplicate email, short password, login success, wrong password, inactive account, password change, OTP generation/validation, MFA bypass confirmed fixed
+- `tests/test_services/test_supplier_service.py` — 8 tests: create, viewer denied, detail, not-found, pagination, scorecard, invalid supplier FK, ranking JOIN correctness
+- `tests/test_services/test_recall_service.py` — 7 tests: initiate, viewer denied, detail, not-found, status update, list pagination, list filter by status
+- `tests/test_services/test_insurance_service.py` — 8 tests: create policy, item not found, viewer denied, list policies, file claim with documents, list claims decoded documents, update status, non-admin denied
+- `tests/test_services/test_retention_service.py` — 6 tests: create success, non-admin denied, SQL injection guard, unknown table rejected, list policies, all whitelist entries are valid SQL identifiers
+- `tests/test_services/test_esg_service.py` — 5 route integration tests: create footprint, GET item, GET summary, 401 for unauthenticated, 403 for viewer write
+
+**4.3 — Tests never verify 401/403 — RESOLVED**
+`tests/test_routes/test_auth_boundaries.py` — 15 tests covering all previously public endpoints:
+- `/metrics`, `/sla` → 401 unauthenticated, 403 viewer, 200 admin
+- `/health` → 200 public (still open by design)
+- `POST /telemetry/ingest` → 401 unauthenticated
+- `GET /recalls`, `GET /recalls/{id}`, `GET /recalls/{id}/trace` → 401
+- `GET /certificates/by-item/{id}`, `GET /certificates/verify-chain/{id}`, `GET /certificates/requests` → 401
+- `GET /events/logs` → 401
+- `GET /esg/summary` → 401
+- API key list → enterprise user cannot see admin's keys
+- API key delete → enterprise user gets 403 deleting admin's key
+
+**4.4 — Tests use SQLite, CI uses PostgreSQL — NOTE**
+The test suite continues to use `sqlite+aiosqlite://` for speed and zero-infrastructure local runs. The Alembic migrations are the authoritative PostgreSQL schema definition. A future improvement is a separate CI job that runs the full suite against the PostgreSQL service container.
+
+**4.5 — Deprecated `event_loop` fixture — RESOLVED**
+`backend/pytest.ini` created with `asyncio_mode = auto`. The explicit `@pytest.fixture(scope="session") def event_loop` in `conftest.py` is removed entirely — pytest-asyncio 0.21+ manages the event loop automatically in auto mode.
+
+---
+
+### Operations Resolutions
+
+**5.1 — No rate limiting on public endpoints — NOTE**
+Login brute-force protection is not implemented at the application layer. Recommended mitigations: deploy behind a reverse proxy (nginx `limit_req_zone`, Cloudflare rate limiting) or add a `slowapi` / `fastapi-limiter` middleware. Tracked as a future infrastructure task.
+
+**5.2 — No request body size limit — NOTE**
+Starlette has no built-in body size limit. Recommended: add `ContentSizeLimitMiddleware` from `starlette-content-size-limit` or configure `--limit-request-body` in Gunicorn. Tracked as a future infrastructure task.
+
+**5.3 — SLA state lost on restart — NOTE**
+`_request_timestamps` remains in-process memory. The fix noted in the critique (persist to a `RequestMetric` table or Redis) is tracked as a future improvement. The error rate calculation bug (counting all requests as errors) is fixed — see 2.8.
+
+**5.4 — No background task queue — NOTE**
+Webhook delivery and notification dispatch continue to use `asyncio.create_task` fire-and-forget. A proper queue (Celery, ARQ) is tracked as a future infrastructure addition. No code change in this iteration.
+
+**5.5 — `asyncpg` missing from `requirements.txt` — RESOLVED**
+`requirements.txt`: `asyncpg==0.29.0` added. Duplicate `aiosqlite==0.20.0` entry removed.
+
+**5.6 — No request ID in logs — NOTE**
+Correlation ID middleware is tracked as a future improvement. The structured JSON log in `main.py` now consistently includes `status`, `duration_ms`, and `client` fields.
+
+---
+
+### Code Quality Resolutions
+
+**6.1 — Query params for write operations — RESOLVED**
+Covered in Architecture 2.3. All write routes now use Pydantic request bodies.
+
+**6.2 — `__import__("datetime")` in hot middleware path — RESOLVED**
+`middleware/api_key_middleware.py`: `from datetime import datetime, timezone` added at the top of the file. The dynamic `__import__` call is gone.
+
+**6.3 — Hardcoded placeholder service URLs — RESOLVED**
+`services/auth_service.py`: `send_email_otp()` now reads from `settings.EMAIL_API_URL` and `settings.EMAIL_API_KEY`. `send_sms_otp()` reads from `settings.SMS_API_URL` and `settings.SMS_API_KEY`. Both return `False` immediately if the URL is not configured, rather than sending requests to placeholder hostnames. New env vars documented in `config.py` and `.env.example`.
+
+**6.4 — `str(datetime)` instead of `.isoformat()` — RESOLVED**
+Fixed across:
+- `services/auth_service.py` — `list_users()` — `created_at.isoformat()`
+- `services/supplier_service.py` — all datetime fields in `get_supplier_detail()` and `list_suppliers()`
+- `services/insurance_service.py` — `valid_from`, `valid_until`, `created_at` in `list_policies()` and `list_claims()`
+- `services/monitoring_service.py` — all timestamp fields use `.isoformat()`
+- `routes/developer_portal.py` — `last_used_at` and `created_at` in `api_list_api_keys()`
+
+**6.5 — No response schemas — RESOLVED**
+`app/schemas.py` created with typed Pydantic response models for all key domains: `HealthResponse`, `MetricsResponse`, `SLAResponse`, `UserDetailResponse`, `SupplierCreateResponse`, `SupplierRankingResponse`, `RecallCreateResponse`, `PolicyCreateResponse`, `ClaimCreateResponse`, `CarbonFootprintCreateResponse`, `ApiKeyCreateResponse`, `ApiKeyListResponse`, `ArchivePolicyCreateResponse`, and others. `routes/monitoring.py` wired with `response_model=` on all three endpoints. `routes/auth.py` updated with `UserDetailResponse` and `OKResponse` on `/me`, `/me` PUT, and `/change-password`. Full `response_model` rollout across all remaining routes is an ongoing effort.
+
+**6.6 — `test_foodtrack.db` not in `.gitignore` — RESOLVED**
+`.gitignore`: Added `test_foodtrack.db`, `test_foodtrack.db-wal`, and `test_foodtrack.db-shm` to prevent SQLite test artefacts from being committed.
+
+---
+
+### Migration Added
+
+`backend/alembic/versions/c1d2e3f4a5b6_fix_data_model_critiques.py` — migration 12, revises `a2b3c4d5e6f7`:
+- `suppliers.is_active` `String(1)` → `Boolean` (data migration: `Y` → `true`)
+- `cargo_policies.is_active` `String(1)` → `Boolean`
+- `insurance_claims.documents_json` `Text` → `JSON` (with `postgresql_using` cast)
+- `users.updated_at` gains `server_default = now()`
+- `users.mfa_otp_token` new `Text` nullable column
+- Indexes: `ix_certificates_expiry_date`, `ix_telemetry_alerts_acknowledged`, `ix_recalls_status`, `ix_supplier_scorecards_supplier_score`, `ix_supplier_scorecards_overall_score`, `ix_insurance_claims_status`

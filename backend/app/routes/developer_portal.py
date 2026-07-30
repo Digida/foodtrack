@@ -1,7 +1,8 @@
 import hashlib
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -13,11 +14,15 @@ from app.utils.dependencies import get_current_user
 router = APIRouter(prefix="/developer", tags=["developer"])
 
 
+class ApiKeyCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    rate_limit: int = Field(1000, ge=1, le=100000)
+    scopes: str | None = None
+
+
 @router.post("/api-keys")
 async def api_create_api_key(
-    name: str = Query(...),
-    rate_limit: int = Query(1000),
-    scopes: str | None = Query(None),
+    req: ApiKeyCreateRequest,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -28,16 +33,23 @@ async def api_create_api_key(
     api_key = ApiKey(
         key_prefix=key_prefix,
         key_hash=key_hash,
-        name=name,
-        rate_limit=rate_limit,
-        scopes=scopes,
+        name=req.name,
+        rate_limit=req.rate_limit,
+        scopes=req.scopes,
         created_by=user.id,
     )
     db.add(api_key)
     await db.commit()
     await db.refresh(api_key)
 
-    return {"id": api_key.id, "name": api_key.name, "api_key": raw_key, "key_prefix": key_prefix, "rate_limit": rate_limit, "scopes": scopes}
+    return {
+        "id": api_key.id,
+        "name": api_key.name,
+        "api_key": raw_key,
+        "key_prefix": key_prefix,
+        "rate_limit": req.rate_limit,
+        "scopes": req.scopes,
+    }
 
 
 @router.get("/api-keys")
@@ -45,8 +57,11 @@ async def api_list_api_keys(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """List only API keys owned by the current user."""
     keys = await db.execute(
-        select(ApiKey).order_by(ApiKey.created_at.desc())
+        select(ApiKey)
+        .where(ApiKey.created_by == user.id)
+        .order_by(ApiKey.created_at.desc())
     )
     results = []
     for k in keys.scalars().all():
@@ -57,8 +72,8 @@ async def api_list_api_keys(
             "rate_limit": k.rate_limit,
             "scopes": k.scopes,
             "is_active": k.is_active,
-            "last_used_at": str(k.last_used_at) if k.last_used_at else None,
-            "created_at": str(k.created_at) if k.created_at else None,
+            "last_used_at": k.last_used_at.isoformat() if k.last_used_at else None,
+            "created_at": k.created_at.isoformat() if k.created_at else None,
         })
     return {"api_keys": results}
 
@@ -69,9 +84,12 @@ async def api_revoke_api_key(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Revoke an API key. Only the key owner may revoke it."""
     api_key = await db.get(ApiKey, key_id)
     if not api_key:
         raise HTTPException(status_code=404, detail="API key not found")
+    if api_key.created_by != user.id:
+        raise HTTPException(status_code=403, detail="You do not own this API key")
     api_key.is_active = False
     await db.commit()
     return {"revoked": True}

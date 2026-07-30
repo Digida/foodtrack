@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Enum as SAEnum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
@@ -28,12 +29,15 @@ class User(Base):
     phone_verified = Column(Boolean, default=False)
     totp_secret = Column(String(64), nullable=True)
     totp_enabled = Column(Boolean, default=False)
+    # OTP token for email/phone MFA — consumed (set to NULL) after successful verification
+    mfa_otp_token = Column(Text, nullable=True)
     biometric_credential_id = Column(String(255), nullable=True)
     biometric_public_key = Column(String(1024), nullable=True)
     sso_provider = Column(String(50), nullable=True)
     sso_id = Column(String(255), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    # Fixed: added server_default so updated_at is set on INSERT, not just on UPDATE
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     tenant = relationship("Tenant", back_populates="users")

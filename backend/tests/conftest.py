@@ -1,7 +1,11 @@
-import asyncio
+"""Test configuration and shared fixtures.
+
+asyncio_mode = auto is set in pytest.ini — no manual event_loop fixture needed.
+Tests use an in-memory SQLite database that is created fresh before each test
+and torn down after.
+"""
 from typing import AsyncGenerator
 
-import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -16,13 +20,6 @@ TEST_DATABASE_URL = "sqlite+aiosqlite:///./test_foodtrack.db"
 
 engine = create_async_engine(TEST_DATABASE_URL, echo=False)
 TestSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -60,7 +57,7 @@ async def enterprise_user(db: AsyncSession) -> User:
     user = User(
         email="enterprise@test.com",
         full_name="Test Enterprise",
-        hashed_password=hash_password("ent123"),
+        hashed_password=hash_password("ent123456"),
         role=UserRole.ENTERPRISE,
         is_active=True,
     )
@@ -75,7 +72,7 @@ async def viewer_user(db: AsyncSession) -> User:
     user = User(
         email="viewer@test.com",
         full_name="Test Viewer",
-        hashed_password=hash_password("view123"),
+        hashed_password=hash_password("view123456"),
         role=UserRole.VIEWER,
         is_active=True,
     )
@@ -141,6 +138,46 @@ async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
 async def client(admin_token: str) -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_db] = override_get_db
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test", headers={"Authorization": f"Bearer {admin_token}"}) as ac:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    ) as ac:
+        yield ac
+    app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def enterprise_client(enterprise_token: str) -> AsyncGenerator[AsyncClient, None]:
+    app.dependency_overrides[get_db] = override_get_db
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {enterprise_token}"},
+    ) as ac:
+        yield ac
+    app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def viewer_client(viewer_token: str) -> AsyncGenerator[AsyncClient, None]:
+    app.dependency_overrides[get_db] = override_get_db
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {viewer_token}"},
+    ) as ac:
+        yield ac
+    app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def anon_client() -> AsyncGenerator[AsyncClient, None]:
+    """Unauthenticated client — for testing 401 boundaries."""
+    app.dependency_overrides[get_db] = override_get_db
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()

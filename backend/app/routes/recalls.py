@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -16,17 +17,21 @@ from app.utils.dependencies import get_current_user
 router = APIRouter(prefix="/recalls", tags=["recalls"])
 
 
+class RecallInitiateRequest(BaseModel):
+    batch_id: int
+    reason: str
+    severity: str = "medium"
+    affected_region: str | None = None
+
+
 @router.post("")
 async def api_initiate_recall(
-    batch_id: int = Query(...),
-    reason: str = Query(...),
-    severity: str = Query("medium"),
-    affected_region: str | None = Query(None),
+    req: RecallInitiateRequest,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        recall = await initiate_recall(db, user, batch_id, reason, RecallSeverity(severity), affected_region)
+        recall = await initiate_recall(db, user, req.batch_id, req.reason, RecallSeverity(req.severity), req.affected_region)
         return {"id": recall.id, "status": recall.status.value}
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=400 if isinstance(e, ValueError) else 403, detail=str(e))
@@ -36,6 +41,7 @@ async def api_initiate_recall(
 async def api_list_recalls(
     page: int = Query(1, ge=1),
     status: str | None = Query(None),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await list_recalls(db, page, status)
@@ -44,6 +50,7 @@ async def api_list_recalls(
 @router.get("/{recall_id}")
 async def api_get_recall(
     recall_id: int,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await get_recall_detail(db, recall_id)
@@ -69,6 +76,7 @@ async def api_update_recall_status(
 @router.get("/{recall_id}/trace")
 async def api_trace_recall(
     recall_id: int,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await trace_recall(db, recall_id)
