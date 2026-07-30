@@ -1,0 +1,14 @@
+{
+  "welcome": "Welcome to FoodTrack",
+  "item_not_found": "Item not found",
+  "unauthorized": "Unauthorized access",
+  "forbidden": "Access denied",
+  "validation_error": "Validation error",
+  "server_error": "Internal server error",
+  "recall_initiated": "Recall has been initiated",
+  "recall_completed": "Recall has been completed",
+  "certificate_expiring": "Certificate is expiring soon",
+  "telemetry_alert": "Telemetry alert triggered",
+  "shipment_delayed": "Shipment is delayed",
+  "inventory_low": "Inventory is low"
+}

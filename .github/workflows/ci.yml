@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: foodtrack
+          POSTGRES_PASSWORD: foodtrack_secret
+          POSTGRES_DB: foodtrack_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready -U foodtrack
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Run lint
+        run: |
+          pip install ruff
+          ruff check backend/
+
+      - name: Run migrations
+        run: |
+          cd backend
+          DATABASE_URL=postgresql+asyncpg://foodtrack:foodtrack_secret@localhost:5432/foodtrack_test alembic upgrade head
+
+      - name: Run tests
+        run: |
+          cd backend
+          DATABASE_URL=postgresql+asyncpg://foodtrack:foodtrack_secret@localhost:5432/foodtrack_test pytest --cov=app --cov-report=term --cov-fail-under=70 -v

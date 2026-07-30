@@ -1,0 +1,14 @@
+{
+  "welcome": "مرحبًا بك في فودتراك",
+  "item_not_found": "العنصر غير موجود",
+  "unauthorized": "دخول غير مصرح به",
+  "forbidden": "الوصول مرفوض",
+  "validation_error": "خطأ في التحقق",
+  "server_error": "خطأ داخلي في الخادم",
+  "recall_initiated": "تم بدء عملية الاستدعاء",
+  "recall_completed": "تم إكمال عملية الاستدعاء",
+  "certificate_expiring": "الشهادة على وشك الانتهاء",
+  "telemetry_alert": "تم تشغيل تنبيه القياس عن بعد",
+  "shipment_delayed": "الشحنة متأخرة",
+  "inventory_low": "المخزون منخفض"
+}
