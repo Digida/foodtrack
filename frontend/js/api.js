@@ -1,4 +1,11 @@
-const API_BASE = '/api/v1';
+/**
+ * FoodTrack API Client
+ * 
+ * API_BASE is set via an inline script in index.html (window.__API_BASE)
+ * or falls back to '/api/v1' (relative proxy for local dev).
+ * For Vercel production, override via window.__API_BASE.
+ */
+const API_BASE = window.__API_BASE || '/api/v1';
 
 async function api(method, path, body = null) {
   const headers = {};
@@ -20,5 +27,6 @@ const API = {
   get: p => api('GET', p),
   post: (p, b) => api('POST', p, b),
   put: (p, b) => api('PUT', p, b),
+  patch: (p, b) => api('PATCH', p, b),
   del: p => api('DELETE', p),
 };
