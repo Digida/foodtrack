@@ -146,73 +146,85 @@ No Docker build step — tests run directly on ubuntu-latest with a PostgreSQL s
 
 ---
 
-## Vercel Deployment (Frontend)
+## Render Deployment (No Docker — Native Python)
 
-The [`frontend/`](../frontend) directory is a static SPA (Single Page Application) that can be deployed directly to Vercel.
+Deploy directly from GitHub to Render using the native Python runtime. No Dockerfile needed.
 
 ### Architecture
 
 ```
-Vercel (CDN)
-  └─ frontend/    →  Served as static files via vercel.json
-       └─ js/api.js  →  Points to your backend API URL
-                        (configured via VITE_API_URL or in api.js)
+Render Web Service
+  └─ backend/  →  FastAPI served via uvicorn/gunicorn
+  └─ frontend/ →  Static files mounted by FastAPI at /
+  └─ PostgreSQL Database (Render add-on)
 ```
 
-The backend API (FastAPI + PostgreSQL) must be deployed separately on a VPS, Railway, or any Python-capable host.
+The entire app (backend API + frontend static files) runs as a single Render Web Service. The frontend is served by FastAPI's `StaticFiles` mount at `app.main.py:96`.
 
 ### Setup Steps
 
-1. **Push to GitHub** (instructions below)
-2. **Go to** https://vercel.com → Import your `foodtrack` repo
-3. **Configure**:
-   - **Framework Preset**: `Other`
-   - **Root Directory**: `./`
-   - **Build Command**: _(none — static)_
-   - **Output Directory**: `frontend`
-4. **Add Environment Variable**:
-   - `VITE_API_URL` → your backend URL (e.g., `https://api.foodtrack.ae`)
-5. **Deploy** — Vercel deploys instantly
+1. **Push to GitHub** (see below)
+2. **Create a Render account** at https://render.com
+3. **New Web Service** → Connect your `digida/foodtrack` repo
+4. **Configure**:
+
+   | Setting | Value |
+   |---------|-------|
+   | **Name** | `foodtrack-api` |
+   | **Runtime** | `Python 3` |
+   | **Build Command** | `pip install -r backend/requirements.txt` |
+   | **Start Command** | `cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
+   | **Plan** | Starter (or Free) |
+
+5. **Add Environment Variables** in Render dashboard:
+
+   | Variable | Value |
+   |----------|-------|
+   | `DATABASE_URL` | `postgresql+asyncpg://foodtrack:pass@host:5432/foodtrack` |
+   | `SECRET_KEY` | Generate: `python -c "import secrets; print(secrets.token_urlsafe(64))"` |
+   | `ALGORITHM` | `HS256` |
+   | `ACCESS_TOKEN_EXPIRE_MINUTES` | `60` |
+   | `SITE_URL` | `https://foodtrack-api.onrender.com` |
+   | `PYTHON_VERSION` | `3.12.0` |
+
+6. **Add a PostgreSQL Database** in Render:
+   - Go to Dashboard → New → PostgreSQL
+   - Copy the internal connection string
+   - Set it as `DATABASE_URL` in your Web Service environment
+
+7. **Run migrations** once the DB is ready:
+   - Go to Render Dashboard → Your Web Service → Shell
+   - Run: `cd backend && alembic upgrade head`
+
+8. **Deploy** — Render auto-deploys on every push to `main`
+
+### Health Check
+
+Render will automatically ping:
+```
+GET /health → {"status": "ok", "database": "connected"}
+```
 
 ### Custom Domain
 
-1. Go to Vercel Dashboard → Project → Domains
-2. Add `foodtrack.ae` or any custom domain
-3. Update DNS A/AAAA/CNAME records as Vercel directs
-4. Update `VITE_API_URL` to match
+1. Render Dashboard → Your Web Service → Settings → Custom Domain
+2. Add your domain (e.g., `api.foodtrack.ae`)
+3. Update DNS CNAME to point to `onrender.com`
+4. Update `SITE_URL` env var
 
 ### Updating API Base URL
 
-Edit [`frontend/js/api.js`](../frontend/js/api.js) and change:
+The frontend uses relative paths (`/api/v1/...`) which proxy to the same Render service. For production with a custom domain, update [`frontend/js/api.js`](../frontend/js/api.js):
 ```js
-const API_BASE = 'https://your-backend-url.com/api/v1';
+const API_BASE = 'https://api.foodtrack.ae/api/v1';
 ```
-
-Or use the Vercel env var at runtime.
-
----
-
-## Backend API Deployment (Separate — e.g., Railway, DigitalOcean, VPS)
-
-The FastAPI backend cannot run on Vercel (Python ASGI not supported on free plan). Deploy it elsewhere.
-
-### Option A: Railway (Recommended for Quick Deploy)
-
-1. Push to GitHub
-2. Go to https://railway.app → New Project → Deploy from GitHub
-3. Set start command: `cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-4. Add env vars: `DATABASE_URL`, `SECRET_KEY`, etc.
-5. Railway auto-provisions PostgreSQL if you add the plugin
-
-### Option B: VPS (Bare-metal)
-
-Follow the [Production Setup](#production-setup) section above.
 
 ---
 
 ## Push to GitHub
 
 ```bash
+# From project root (D:\Work\clients\FoodTrack)
 git init
 git add -A
 git commit -m "Initial commit: FoodTrack — Phygital Trust Infrastructure
@@ -240,3 +252,10 @@ git remote add origin https://github.com/digida/foodtrack.git
 git branch -M main
 git push -u origin main
 ```
+
+> **Note:** If you get `403 Permission denied`, your machine has cached credentials for another GitHub account. Run this to clear them and try again:
+> ```
+> cmdkey /delete:git:https://github.com
+> git push -u origin main
+> ```
+> A browser will open — log in as **digida** to authenticate.
