@@ -2,6 +2,12 @@ const Router = {
   routes: {},
   add: (pattern, handler) => { Router.routes[pattern] = handler; },
 
+  navigate(path) {
+    const hash = path.startsWith('#') ? path : '#' + path;
+    if (window.location.hash === hash) this.resolve();
+    else window.location.hash = hash;
+  },
+
   init() {
     window.addEventListener('hashchange', () => this.resolve());
     if (!window.location.hash || window.location.hash === '#') {
