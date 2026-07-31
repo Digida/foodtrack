@@ -23,7 +23,7 @@ class Product(Base):
     id = Column(Integer, primary_key=True, index=True)
     sku = Column(String(100), unique=True, index=True, nullable=False)
     name = Column(String(255), nullable=False)
-    category = Column(SAEnum(ProductCategory), default=ProductCategory.OTHER)
+    category = Column(SAEnum(ProductCategory, native_enum=False), default=ProductCategory.OTHER)
     item_id = Column(Integer, ForeignKey("taxonomy_items.id"), nullable=True, index=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     description = Column(Text, nullable=True)

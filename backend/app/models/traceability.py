@@ -25,7 +25,7 @@ class TraceabilityEvent(Base):
     event_id = Column(String(100), unique=True, index=True, nullable=False)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
     item_id = Column(Integer, ForeignKey("taxonomy_items.id"), nullable=True, index=True)
-    event_type = Column(SAEnum(EventType), nullable=False)
+    event_type = Column(SAEnum(EventType, native_enum=False), nullable=False)
     location_name = Column(String(255), nullable=True)
     location_lat = Column(Float, nullable=True)
     location_lng = Column(Float, nullable=True)

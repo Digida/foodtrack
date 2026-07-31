@@ -26,7 +26,7 @@ class CargoRegistration(Base):
     origin_location = Column(String(255), nullable=True)
     destination_location = Column(String(255), nullable=True)
     mode = Column(String(50), nullable=True)
-    status = Column(SAEnum(CargoStatus), default=CargoStatus.DRAFT)
+    status = Column(SAEnum(CargoStatus, native_enum=False), default=CargoStatus.DRAFT)
     carrier_name = Column(String(255), nullable=True)
     carrier_ref = Column(String(255), nullable=True)
     tracking_number = Column(String(255), nullable=True)

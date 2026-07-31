@@ -55,7 +55,7 @@ class InsuranceClaim(Base):
     description = Column(Text, nullable=True)
     claim_amount = Column(Float, nullable=False)
     currency = Column(String(3), default="USD")
-    status = Column(SAEnum(ClaimStatus), default=ClaimStatus.DRAFT, nullable=False)
+    status = Column(SAEnum(ClaimStatus, native_enum=False), default=ClaimStatus.DRAFT, nullable=False)
     # Fixed: was Text — now JSON so documents are stored/returned as a proper array
     documents_json = Column(JSON, nullable=True)
     filed_by = Column(Integer, ForeignKey("users.id"), nullable=True)

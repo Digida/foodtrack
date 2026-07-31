@@ -28,8 +28,8 @@ class EnrichmentLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
-    source = Column(SAEnum(EnrichmentSource), default=EnrichmentSource.WEB_SEARCH)
-    status = Column(SAEnum(EnrichmentStatus), default=EnrichmentStatus.PENDING)
+    source = Column(SAEnum(EnrichmentSource, native_enum=False), default=EnrichmentSource.WEB_SEARCH)
+    status = Column(SAEnum(EnrichmentStatus, native_enum=False), default=EnrichmentStatus.PENDING)
     entity_type = Column(String(50), nullable=True)
     entity_id = Column(Integer, nullable=True)
     summary = Column(Text, nullable=True)

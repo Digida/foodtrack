@@ -23,7 +23,7 @@ class User(Base):
     phone = Column(String(50), unique=True, nullable=True)
     full_name = Column(String(255), nullable=False)
     company = Column(String(255), nullable=True)
-    role = Column(SAEnum(UserRole), default=UserRole.VIEWER, nullable=False)
+    role = Column(SAEnum(UserRole, native_enum=False), default=UserRole.VIEWER, nullable=False)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     hashed_password = Column(String(255), nullable=False)
     # Secondary contact details (used for e.g. alternate email / alternate phone)
