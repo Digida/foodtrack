@@ -6,7 +6,7 @@ from app.models.enrichment import EnrichmentLog, EnrichmentSuggestion, Enrichmen
 from app.models.taxonomy import TaxonomyItem, TaxonomyNode
 from app.models.tracking import Collection, CollectionItem, FeedSource
 from app.models.user import User, UserRole
-from app.tools import (
+from tools import (
     web_search, read_url, fetch_nutrition,
     fetch_market_price, translate_text, fetch_weather,
 )

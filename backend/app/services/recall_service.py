@@ -6,7 +6,7 @@ from app.models.recall import Recall, RecallEvent, RecallSeverity, RecallStatus
 from app.models.tracking import Batch, ShipmentBatch
 from app.models.taxonomy import TaxonomyItem
 from app.models.user import User, UserRole
-from app.tools.notification_dispatcher import send_notification
+from tools.notification_dispatcher import send_notification
 
 PAGE_SIZE = 20
 

@@ -9,7 +9,7 @@ from app.models.certificate import Certificate, CertificateStatus, CertificateTy
 from app.models.taxonomy import TaxonomyItem
 from app.models.product import Product
 from app.models.user import User, UserRole
-from app.tools.notification_dispatcher import send_notification
+from tools.notification_dispatcher import send_notification
 
 DUBAI_MARKET_CERTS: dict[str, list[CertificateType]] = {
     "dubai_import": [

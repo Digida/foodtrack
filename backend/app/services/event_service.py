@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app.models.events import EventLog, WebhookSubscription, WebhookEvent
 from app.models.user import User, UserRole
-from app.tools.notification_dispatcher import send_notification
+from tools.notification_dispatcher import send_notification
 
 _ws_connections: dict[str, list[WebSocket]] = {}
 

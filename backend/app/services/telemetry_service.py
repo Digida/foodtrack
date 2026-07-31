@@ -5,7 +5,7 @@ from sqlalchemy import select, func
 
 from app.models.telemetry import TelemetryReading, TelemetryAlert
 from app.models.user import User, UserRole
-from app.tools.notification_dispatcher import send_notification
+from tools.notification_dispatcher import send_notification
 
 PAGE_SIZE = 20
 

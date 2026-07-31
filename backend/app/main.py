@@ -1,14 +1,75 @@
 import json
 import logging
+import logging.config
 import time
+import traceback
+import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
 from app.database import init_db
+
+# ── Logging configuration ──────────────────────────────────────────────────
+# Emit every log line as a JSON object so output is machine-readable and
+# grep-friendly while remaining human-readable in a terminal.
+
+class _JsonFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        # If the message is already a JSON string (from the request logger),
+        # embed it directly; otherwise wrap it.
+        try:
+            payload = json.loads(record.getMessage())
+        except (ValueError, TypeError):
+            payload = {"msg": record.getMessage()}
+
+        payload.setdefault("level", record.levelname)
+        payload.setdefault("logger", record.name)
+        payload.setdefault("ts", self.formatTime(record, self.datefmt))
+
+        if record.exc_info:
+            payload["exc"] = self.formatException(record.exc_info)
+
+        return json.dumps(payload, ensure_ascii=False)
+
+
+LOGGING_CONFIG = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "json": {"()": _JsonFormatter, "datefmt": "%Y-%m-%dT%H:%M:%S"},
+        # Plain text fallback for uvicorn's own access/error loggers
+        "plain": {"format": "%(levelname)s %(name)s: %(message)s"},
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stdout",
+            "formatter": "json",
+        },
+        "uvicorn_console": {
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stdout",
+            "formatter": "plain",
+        },
+    },
+    "loggers": {
+        # Application loggers — JSON output
+        "app": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
+        "uvicorn": {"handlers": ["uvicorn_console"], "level": "INFO", "propagate": False},
+        "uvicorn.error": {"handlers": ["uvicorn_console"], "level": "INFO", "propagate": False},
+        "uvicorn.access": {"handlers": ["uvicorn_console"], "level": "INFO", "propagate": False},
+        "sqlalchemy.engine": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+    },
+    "root": {"handlers": ["console"], "level": "INFO"},
+}
+
+logging.config.dictConfig(LOGGING_CONFIG)
+logger = logging.getLogger("app")
 from app.routes import (
     auth, products, traceability, certificates, analytics, share, contact, taxonomy,
     search, batches, warehouses, shipments, collections, inventory, item_movements,
@@ -32,17 +93,34 @@ try:
     trace.set_tracer_provider(provider)
     _tracer = trace.get_tracer(__name__)
     _otel_available = True
+    logger.info({"msg": "OpenTelemetry SDK loaded", "exporter": "OTLP"})
 except ImportError:
     _otel_available = False
+    logger.info({"msg": "OpenTelemetry not available — tracing disabled"})
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info({"msg": "FoodTrack starting up", "db": settings.DATABASE_URL.split("///")[0], "site": settings.SITE_URL})
     if _otel_available:
         FastAPIInstrumentor.instrument_app(app)
-        logging.info("OpenTelemetry tracing enabled")
-    await init_db()
+    try:
+        await init_db()
+        logger.info({"msg": "Database initialised"})
+    except Exception as exc:
+        logger.error({"msg": "Database init failed", "error": str(exc), "trace": traceback.format_exc()})
+        raise
+    # Log every registered route at startup for easy verification
+    route_list = [
+        {"path": r.path, "methods": list(getattr(r, "methods", []))}
+        for r in app.routes
+        if hasattr(r, "path") and getattr(r, "methods", None)
+    ]
+    logger.info({"msg": "Routes registered", "count": len(route_list)})
+    for r in route_list:
+        logger.debug({"msg": "route", "path": r["path"], "methods": r["methods"]})
     yield
+    logger.info({"msg": "FoodTrack shutting down"})
 
 
 app = FastAPI(title="FoodTrack - Digital Trust Infrastructure", version="1.0.0", lifespan=lifespan)
@@ -63,22 +141,53 @@ app.add_middleware(
 
 
 @app.middleware("http")
-async def structured_logging_and_sla(request: Request, call_next):
+async def request_tracing_middleware(request: Request, call_next):
+    """Per-request structured logging with correlation ID, timing, and exception capture."""
     from app.services.monitoring_service import record_request
-    start = time.time()
-    response = await call_next(request)
-    duration_ms = int((time.time() - start) * 1000)
-    record_request(duration_ms, response.status_code)
 
-    # Structured JSON log every request
-    logging.info(json.dumps({
+    request_id = str(uuid.uuid4())[:8]
+    request.state.request_id = request_id
+
+    logger.info({
+        "event": "request_start",
+        "request_id": request_id,
         "method": request.method,
         "path": request.url.path,
-        "status": response.status_code,
-        "duration_ms": duration_ms,
+        "query": str(request.url.query) or None,
         "client": request.client.host if request.client else None,
-    }))
-    return response
+        "user_agent": request.headers.get("user-agent"),
+    })
+
+    start = time.time()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        response.headers["X-Request-ID"] = request_id
+        return response
+    except Exception as exc:
+        logger.error({
+            "event": "unhandled_exception",
+            "request_id": request_id,
+            "method": request.method,
+            "path": request.url.path,
+            "error": str(exc),
+            "trace": traceback.format_exc(),
+        })
+        raise
+    finally:
+        duration_ms = int((time.time() - start) * 1000)
+        record_request(duration_ms, status_code)
+        level = logging.WARNING if status_code >= 400 else logging.INFO
+        logger.log(level, json.dumps({
+            "event": "request_end",
+            "request_id": request_id,
+            "method": request.method,
+            "path": request.url.path,
+            "status": status_code,
+            "duration_ms": duration_ms,
+            "client": request.client.host if request.client else None,
+        }))
 
 
 @app.middleware("http")
@@ -99,7 +208,6 @@ async def accept_language_middleware(request: Request, call_next):
     lang = get_accept_language(request.headers.get("accept-language"))
     request.state.language = lang
     return await call_next(request)
-
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(products.router, prefix="/api/v1")
