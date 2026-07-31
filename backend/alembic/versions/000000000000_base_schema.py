@@ -28,8 +28,8 @@ def upgrade() -> None:
         sa.Column("tier", sa.String(50), nullable=True),
         sa.Column("config_json", sa.Text, nullable=True),
         sa.Column("is_active", sa.Boolean, default=True),
-        sa.Column("created_at", sa.DateTime, nullable=True),
-        sa.Column("updated_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # ── users ────────────────────────────────────────────────────────────────
@@ -66,8 +66,8 @@ def upgrade() -> None:
         sa.Column("description", sa.Text, nullable=True),
         sa.Column("icon", sa.String(50), nullable=True),
         sa.Column("is_active", sa.Boolean, default=True, server_default="true"),
-        sa.Column("created_at", sa.DateTime, nullable=True),
-        sa.Column("updated_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # ── taxonomy_nodes ───────────────────────────────────────────────────────
@@ -82,7 +82,7 @@ def upgrade() -> None:
         sa.Column("description", sa.Text, nullable=True),
         sa.Column("sort_order", sa.Integer, default=0, server_default="0"),
         sa.Column("is_active", sa.Boolean, default=True, server_default="true"),
-        sa.Column("created_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # ── taxonomy_items ───────────────────────────────────────────────────────
@@ -108,8 +108,8 @@ def upgrade() -> None:
         sa.Column("nfc_uid_template", sa.String(255), nullable=True),
         sa.Column("barcode_prefix", sa.String(12), nullable=True),
         sa.Column("is_active", sa.Boolean, default=True, server_default="true"),
-        sa.Column("created_at", sa.DateTime, nullable=True),
-        sa.Column("updated_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # ── item_names ───────────────────────────────────────────────────────────
@@ -190,7 +190,7 @@ def upgrade() -> None:
         sa.Column("temperature_celsius", sa.Float, nullable=True),
         sa.Column("humidity_percent", sa.Float, nullable=True),
         sa.Column("is_active", sa.Boolean, default=True, server_default="true"),
-        sa.Column("created_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # ── batches ──────────────────────────────────────────────────────────────
@@ -209,8 +209,8 @@ def upgrade() -> None:
         sa.Column("expiry_date", sa.DateTime(timezone=True), nullable=True),
         sa.Column("notes", sa.Text, nullable=True),
         sa.Column("created_by", sa.Integer, sa.ForeignKey("users.id"), nullable=False),
-        sa.Column("created_at", sa.DateTime, nullable=True),
-        sa.Column("updated_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # ── warehouse_items ──────────────────────────────────────────────────────
@@ -226,8 +226,8 @@ def upgrade() -> None:
         sa.Column("location_bin", sa.String(100), nullable=True),
         sa.Column("last_counted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("notes", sa.Text, nullable=True),
-        sa.Column("created_at", sa.DateTime, nullable=True),
-        sa.Column("updated_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # ── tracking_events ──────────────────────────────────────────────────────
@@ -244,7 +244,7 @@ def upgrade() -> None:
         sa.Column("recorded_by", sa.String(255), nullable=True),
         sa.Column("notes", sa.Text, nullable=True),
         sa.Column("event_timestamp", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("created_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # ── shipments ────────────────────────────────────────────────────────────
@@ -271,8 +271,8 @@ def upgrade() -> None:
         sa.Column("total_volume_m3", sa.Float, nullable=True),
         sa.Column("notes", sa.Text, nullable=True),
         sa.Column("created_by", sa.Integer, sa.ForeignKey("users.id"), nullable=False),
-        sa.Column("created_at", sa.DateTime, nullable=True),
-        sa.Column("updated_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # ── shipment_batches ─────────────────────────────────────────────────────
@@ -284,7 +284,7 @@ def upgrade() -> None:
         sa.Column("item_id", sa.Integer, sa.ForeignKey("taxonomy_items.id"), nullable=True, index=True),
         sa.Column("quantity", sa.Integer, nullable=False),
         sa.Column("item_shipment_status", sa.String(20), nullable=True, server_default="pending"),
-        sa.Column("created_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # ── shipment_tracking_events ─────────────────────────────────────────────
@@ -301,7 +301,7 @@ def upgrade() -> None:
         sa.Column("carrier_status", sa.String(255), nullable=True),
         sa.Column("estimated_next_update", sa.DateTime(timezone=True), nullable=True),
         sa.Column("event_timestamp", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("created_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # ── traceability_events ──────────────────────────────────────────────────
@@ -380,8 +380,8 @@ def upgrade() -> None:
         sa.Column("volume_m3", sa.Float, nullable=True),
         sa.Column("notes", sa.Text, nullable=True),
         sa.Column("created_by", sa.Integer, sa.ForeignKey("users.id"), nullable=False),
-        sa.Column("created_at", sa.DateTime, nullable=True),
-        sa.Column("updated_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # ── certificate_requests ─────────────────────────────────────────────────
@@ -416,7 +416,7 @@ def upgrade() -> None:
         sa.Column("is_active", sa.Boolean, default=True, server_default="true"),
         sa.Column("api_key", sa.String(500), nullable=True),
         sa.Column("config_json", sa.Text, nullable=True),
-        sa.Column("created_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     op.create_table(
@@ -431,8 +431,8 @@ def upgrade() -> None:
         sa.Column("feed_source_id", sa.Integer, sa.ForeignKey("feed_sources.id"), nullable=True),
         sa.Column("is_active", sa.Boolean, default=True, server_default="true"),
         sa.Column("sort_order", sa.Integer, server_default="0"),
-        sa.Column("created_at", sa.DateTime, nullable=True),
-        sa.Column("updated_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     op.create_table(
@@ -442,7 +442,7 @@ def upgrade() -> None:
         sa.Column("item_id", sa.Integer, sa.ForeignKey("taxonomy_items.id"), nullable=False),
         sa.Column("sort_order", sa.Integer, server_default="0"),
         sa.Column("notes", sa.Text, nullable=True),
-        sa.Column("created_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # ── item_rates ───────────────────────────────────────────────────────────
@@ -462,8 +462,8 @@ def upgrade() -> None:
         sa.Column("notes", sa.Text, nullable=True),
         sa.Column("is_active", sa.String(1), server_default="Y"),
         sa.Column("created_by", sa.Integer, sa.ForeignKey("users.id"), nullable=True),
-        sa.Column("created_at", sa.DateTime, nullable=True),
-        sa.Column("updated_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # ── search_logs ──────────────────────────────────────────────────────────
@@ -487,7 +487,7 @@ def upgrade() -> None:
         sa.Column("email", sa.String(255), nullable=False),
         sa.Column("subject", sa.String(500), nullable=False),
         sa.Column("message", sa.Text, nullable=False),
-        sa.Column("created_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # ── enrichment_logs + suggestions ────────────────────────────────────────
@@ -503,8 +503,8 @@ def upgrade() -> None:
         sa.Column("details", sa.Text, nullable=True),
         sa.Column("duration_ms", sa.Integer, nullable=True),
         sa.Column("triggered_by", sa.Integer, sa.ForeignKey("users.id"), nullable=True),
-        sa.Column("created_at", sa.DateTime, nullable=True),
-        sa.Column("completed_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     op.create_table(
@@ -521,7 +521,7 @@ def upgrade() -> None:
         sa.Column("payload_json", sa.Text, nullable=True),
         sa.Column("status", sa.String(20), server_default="open"),
         sa.Column("created_by", sa.Integer, sa.ForeignKey("users.id"), nullable=True),
-        sa.Column("created_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # ── events ───────────────────────────────────────────────────────────────
@@ -534,8 +534,8 @@ def upgrade() -> None:
         sa.Column("events", sa.Text, nullable=True),
         sa.Column("is_active", sa.Boolean, default=True, server_default="true"),
         sa.Column("created_by", sa.Integer, sa.ForeignKey("users.id"), nullable=True),
-        sa.Column("created_at", sa.DateTime, nullable=True),
-        sa.Column("updated_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     op.create_table(
@@ -547,7 +547,7 @@ def upgrade() -> None:
         sa.Column("payload_json", sa.Text, nullable=True),
         sa.Column("source_ip", sa.String(45), nullable=True),
         sa.Column("published_by", sa.Integer, sa.ForeignKey("users.id"), nullable=True),
-        sa.Column("created_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # ── telemetry ────────────────────────────────────────────────────────────
@@ -566,7 +566,7 @@ def upgrade() -> None:
         sa.Column("location_lng", sa.Float, nullable=True),
         sa.Column("metadata_json", sa.Text, nullable=True),
         sa.Column("recorded_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("created_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     op.create_table(
@@ -582,7 +582,7 @@ def upgrade() -> None:
         sa.Column("severity", sa.String(20), server_default="warning"),
         sa.Column("acknowledged", sa.Boolean, default=False, server_default="false"),
         sa.Column("acknowledged_by", sa.Integer, sa.ForeignKey("users.id"), nullable=True),
-        sa.Column("created_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
     )
     op.create_index("ix_telemetry_alerts_acknowledged", "telemetry_alerts", ["acknowledged"])
 
@@ -598,10 +598,10 @@ def upgrade() -> None:
         sa.Column("rate_limit_window", sa.Integer, server_default="3600"),
         sa.Column("scopes", sa.Text, nullable=True),
         sa.Column("is_active", sa.Boolean, default=True, server_default="true"),
-        sa.Column("last_used_at", sa.DateTime, nullable=True),
-        sa.Column("expires_at", sa.DateTime, nullable=True),
+        sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_by", sa.Integer, sa.ForeignKey("users.id"), nullable=True),
-        sa.Column("created_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # ── retention ────────────────────────────────────────────────────────────
@@ -613,8 +613,8 @@ def upgrade() -> None:
         sa.Column("retention_days", sa.Integer, nullable=False),
         sa.Column("archive_to_table", sa.String(100), nullable=True),
         sa.Column("is_active", sa.Boolean, default=True, server_default="true"),
-        sa.Column("created_at", sa.DateTime, nullable=True),
-        sa.Column("updated_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # ── esg ──────────────────────────────────────────────────────────────────
@@ -630,8 +630,8 @@ def upgrade() -> None:
         sa.Column("confidence", sa.String(20), server_default="medium"),
         sa.Column("metadata_json", sa.Text, nullable=True),
         sa.Column("created_by", sa.Integer, sa.ForeignKey("users.id"), nullable=True),
-        sa.Column("created_at", sa.DateTime, nullable=True),
-        sa.Column("updated_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # ── recalls ──────────────────────────────────────────────────────────────
@@ -645,11 +645,11 @@ def upgrade() -> None:
         sa.Column("severity", sa.String(20), server_default="medium"),
         sa.Column("status", sa.String(20), server_default="initiated"),
         sa.Column("affected_region", sa.String(255), nullable=True),
-        sa.Column("notified_at", sa.DateTime, nullable=True),
-        sa.Column("completed_at", sa.DateTime, nullable=True),
+        sa.Column("notified_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_by", sa.Integer, sa.ForeignKey("users.id"), nullable=False),
-        sa.Column("created_at", sa.DateTime, nullable=True),
-        sa.Column("updated_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
     )
     op.create_index("ix_recalls_status", "recalls", ["status"])
 
@@ -660,7 +660,7 @@ def upgrade() -> None:
         sa.Column("action", sa.String(50), nullable=False),
         sa.Column("description", sa.Text, nullable=True),
         sa.Column("performed_by", sa.Integer, sa.ForeignKey("users.id"), nullable=True),
-        sa.Column("created_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     # ── suppliers ────────────────────────────────────────────────────────────
@@ -748,8 +748,8 @@ def upgrade() -> None:
         sa.Column("avg_humidity_percent", sa.Float, nullable=True),
         sa.Column("last_stocked_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("last_counted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime, nullable=True),
-        sa.Column("updated_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
     )
 
     op.create_table(
@@ -765,7 +765,7 @@ def upgrade() -> None:
         sa.Column("notes", sa.Text, nullable=True),
         sa.Column("moved_by", sa.Integer, sa.ForeignKey("users.id"), nullable=True),
         sa.Column("moved_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
     )
 
 
