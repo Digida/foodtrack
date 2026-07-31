@@ -1,4 +1,4 @@
-const CACHE = 'foodtrack-v1';
+const CACHE = 'foodtrack-v2';
 const PRECACHE = [
   '/',
   '/index.html',
@@ -27,15 +27,14 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  if (e.request.url.startsWith(self.location.origin) && e.request.method === 'GET') {
-    e.respondWith(
-      caches.match(e.request).then((cached) => cached || fetch(e.request).then((res) => {
-        if (res.ok && res.type === 'basic') {
-          const clone = res.clone();
-          caches.open(CACHE).then((cache) => cache.put(e.request, clone));
-        }
-        return res;
-      }))
-    );
-  }
+  if (!e.request.url.startsWith(self.location.origin) || e.request.method !== 'GET') return;
+  e.respondWith(
+    fetch(e.request).then((res) => {
+      if (res.ok && res.type === 'basic') {
+        const clone = res.clone();
+        caches.open(CACHE).then((cache) => cache.put(e.request, clone));
+      }
+      return res;
+    }).catch(() => caches.match(e.request))
+  );
 });

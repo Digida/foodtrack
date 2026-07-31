@@ -1345,7 +1345,7 @@ Pages.showChangePassword = () => {
 
 Pages.search = (app, query) => {
   const isAuth = Auth.isLoggedIn();
-  const layoutFn = isAuth ? UI.layout : UI.publicLayout;
+  const layoutFn = isAuth ? UI.layout : (bodyFn) => UI.publicLayout(bodyFn);
   const title = query ? `Search: ${query}` : 'Search';
   app.appendChild(layoutFn(title, async () => {
     const body = document.createElement('div');
