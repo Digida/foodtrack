@@ -261,4 +261,6 @@ app.include_router(esg.router, prefix="/api/v1")
 app.include_router(monitoring.router)
 app.include_router(startup.router, prefix="/api/v1")
 
-app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")
+from pathlib import Path as _Path
+_FRONTEND_DIR = _Path(__file__).resolve().parent.parent.parent / "frontend"
+app.mount("/", StaticFiles(directory=str(_FRONTEND_DIR), html=True), name="frontend")

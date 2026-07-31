@@ -144,13 +144,27 @@ async def run_startup_tasks(backend_dir: Path) -> None:
 async def _run_migrations(backend_dir: Path) -> None:
     """
     Run `alembic upgrade head` in a thread pool so it doesn't block the
-    event loop.  Reports pending revisions before and after.
+    event loop.
+
+    SQLite (dev): tables are managed by SQLAlchemy create_all in init_db().
+    Alembic is skipped — running it against a create_all DB causes conflicts.
+
+    PostgreSQL (prod): Alembic is the sole schema authority.
     """
+    from app.config import settings
     ms = _state["migration"]
     ms["status"] = "running"
 
+    # Skip Alembic for SQLite — init_db() already ran create_all
+    if settings.DATABASE_URL.startswith("sqlite"):
+        ms["status"] = "done"
+        ms["detail"] = "SQLite detected — schema managed by create_all, Alembic skipped"
+        ms["current"] = "n/a (sqlite)"
+        ms["head"] = "n/a (sqlite)"
+        logger.info({"msg": "Migrations: skipped for SQLite", "detail": ms["detail"]})
+        return
+
     try:
-        # Read current and head revisions without running migrations yet
         current = await _alembic_current(backend_dir)
         head    = await _alembic_head(backend_dir)
         ms["current"] = current
