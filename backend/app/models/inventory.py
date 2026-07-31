@@ -37,8 +37,8 @@ class ItemInventory(Base):
     avg_humidity_percent = Column(Float, nullable=True)
     last_stocked_at = Column(DateTime(timezone=True), nullable=True)
     last_counted_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     item = relationship("TaxonomyItem")
     warehouse = relationship("Warehouse")
@@ -59,7 +59,7 @@ class InventoryMovement(Base):
     notes = Column(Text, nullable=True)
     moved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     moved_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     item = relationship("TaxonomyItem")
     batch = relationship("Batch")

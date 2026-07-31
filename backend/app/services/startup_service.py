@@ -22,6 +22,7 @@ Design principles
 
 import asyncio
 import logging
+import re
 import subprocess
 import sys
 import time
@@ -452,7 +453,10 @@ async def _insert_item(
 
     parts = gestation.split("-") if gestation else []
     gestation_period = "-".join(parts[:2]) if parts else ""
-    gestation_unit   = "months" if gestation_period else ""
+    gestation_unit = ""
+    if gestation_period:
+        unit_match = re.search(r"(month|week|year)s?\b", gestation)
+        gestation_unit = (unit_match.group(1) + "s") if unit_match else "months"
 
     item = TaxonomyItem(
         node_id=node.id,

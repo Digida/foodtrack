@@ -36,8 +36,8 @@ class EnrichmentLog(Base):
     details = Column(Text, nullable=True)
     duration_ms = Column(Integer, nullable=True)
     triggered_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    completed_at = Column(DateTime(timezone=True), nullable=True)
 
     tenant = relationship("Tenant", back_populates="enrichment_logs")
     trigger_user = relationship("User")
@@ -58,7 +58,7 @@ class EnrichmentSuggestion(Base):
     payload_json = Column(Text, nullable=True)
     status = Column(String(20), default="open")
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     tenant = relationship("Tenant", back_populates="enrichment_suggestions")
     creator = relationship("User")

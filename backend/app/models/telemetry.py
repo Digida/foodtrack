@@ -33,7 +33,7 @@ class TelemetryReading(Base):
     location_lng = Column(Float, nullable=True)
     metadata_json = Column(Text, nullable=True)
     recorded_at = Column(DateTime(timezone=True), nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     tenant = relationship("Tenant", back_populates="telemetry_readings")
     item = relationship("TaxonomyItem")
@@ -58,7 +58,7 @@ class TelemetryAlert(Base):
     severity = Column(String(20), default="warning")
     acknowledged = Column(Boolean, default=False)
     acknowledged_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     tenant = relationship("Tenant", back_populates="telemetry_alerts")
     ack_user = relationship("User")

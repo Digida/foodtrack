@@ -32,8 +32,8 @@ class ItemRate(Base):
     notes = Column(Text, nullable=True)
     is_active = Column(String(1), default="Y")
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     item = relationship("TaxonomyItem")
     tenant = relationship("Tenant", back_populates="item_rates")

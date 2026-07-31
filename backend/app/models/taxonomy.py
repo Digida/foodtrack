@@ -30,8 +30,8 @@ class Taxonomy(Base):
     description = Column(Text, nullable=True)
     icon = Column(String(50), nullable=True)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     nodes = relationship("TaxonomyNode", back_populates="taxonomy")
     tenant = relationship("Tenant", back_populates="taxonomies")
@@ -49,7 +49,7 @@ class TaxonomyNode(Base):
     description = Column(Text, nullable=True)
     sort_order = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     taxonomy = relationship("Taxonomy", back_populates="nodes")
     items = relationship("TaxonomyItem", back_populates="node", cascade="all, delete-orphan")
@@ -79,8 +79,8 @@ class TaxonomyItem(Base):
     nfc_uid_template = Column(String(255), nullable=True)
     barcode_prefix = Column(String(12), nullable=True)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     node = relationship("TaxonomyNode", back_populates="items")
     names = relationship("ItemName", back_populates="item", cascade="all, delete-orphan")

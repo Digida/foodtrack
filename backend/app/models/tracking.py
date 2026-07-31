@@ -59,8 +59,8 @@ class Batch(Base):
     expiry_date = Column(DateTime(timezone=True), nullable=True)
     notes = Column(Text, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     tenant = relationship("Tenant", back_populates="batches")
     product = relationship("Product")
@@ -86,7 +86,7 @@ class Warehouse(Base):
     temperature_celsius = Column(Float, nullable=True)
     humidity_percent = Column(Float, nullable=True)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     tenant = relationship("Tenant", back_populates="warehouses")
     items = relationship("WarehouseItem", back_populates="warehouse", cascade="all, delete-orphan")
@@ -105,8 +105,8 @@ class WarehouseItem(Base):
     location_bin = Column(String(100), nullable=True)
     last_counted_at = Column(DateTime(timezone=True), nullable=True)
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     warehouse = relationship("Warehouse", back_populates="items")
     batch = relationship("Batch", back_populates="warehouse_items")
@@ -137,8 +137,8 @@ class Shipment(Base):
     total_volume_m3 = Column(Float, nullable=True)
     notes = Column(Text, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     tenant = relationship("Tenant", back_populates="shipments")
     origin = relationship("Warehouse", foreign_keys=[origin_id])
@@ -156,7 +156,7 @@ class ShipmentBatch(Base):
     item_id = Column(Integer, ForeignKey("taxonomy_items.id"), nullable=True, index=True)
     quantity = Column(Integer, nullable=False)
     item_shipment_status = Column(SAEnum(ItemShipmentStatus), default=ItemShipmentStatus.PENDING, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     shipment = relationship("Shipment", back_populates="batches")
     batch = relationship("Batch")
@@ -177,7 +177,7 @@ class TrackingEvent(Base):
     recorded_by = Column(String(255), nullable=True)
     notes = Column(Text, nullable=True)
     event_timestamp = Column(DateTime(timezone=True), nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     batch = relationship("Batch", back_populates="tracking_events")
 
@@ -196,7 +196,7 @@ class ShipmentTrackingEvent(Base):
     carrier_status = Column(String(255), nullable=True)
     estimated_next_update = Column(DateTime(timezone=True), nullable=True)
     event_timestamp = Column(DateTime(timezone=True), nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     shipment = relationship("Shipment", back_populates="tracking_events")
 
@@ -214,8 +214,8 @@ class Collection(Base):
     feed_source_id = Column(Integer, ForeignKey("feed_sources.id"), nullable=True)
     is_active = Column(Boolean, default=True)
     sort_order = Column(Integer, default=0)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     tenant = relationship("Tenant", back_populates="collections")
     feed_source = relationship("FeedSource")
@@ -230,7 +230,7 @@ class CollectionItem(Base):
     item_id = Column(Integer, ForeignKey("taxonomy_items.id"), nullable=False)
     sort_order = Column(Integer, default=0)
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     collection = relationship("Collection", back_populates="items")
     item = relationship("TaxonomyItem")
@@ -250,6 +250,6 @@ class FeedSource(Base):
     is_active = Column(Boolean, default=True)
     api_key = Column(String(500), nullable=True)
     config_json = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     taxonomy_target = relationship("Taxonomy")
