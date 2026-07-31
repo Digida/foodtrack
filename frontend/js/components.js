@@ -227,7 +227,7 @@ const UI = {
     return wrapper;
   },
 
-  publicLayout: (bodyFn) => {
+  buildMainNav: () => {
     const curHash = window.location.hash || '#home';
     const loggedIn = Auth.isLoggedIn();
     const isActive = (href) => curHash === href ? 'active' : '';
@@ -261,34 +261,16 @@ const UI = {
       document.querySelector('.pub-links').classList.toggle('open');
       document.querySelector('.pub-auth').classList.toggle('open');
     });
-    window.addEventListener('hashchange', () => {
+    if (UI._navCloseHandler) window.removeEventListener('hashchange', UI._navCloseHandler);
+    UI._navCloseHandler = () => {
       document.querySelector('.pub-links')?.classList.remove('open');
       document.querySelector('.pub-auth')?.classList.remove('open');
-    });
-    const content = UI.el('div', { className: 'pub-content' });
-    const footer = UI.el('footer', { className: 'pub-footer' },
-      UI.el('div', { className: 'footer-inner' },
-        UI.el('div', {}, '\u00a9 2026 FoodTrack. All rights reserved.'),
-        UI.el('div', { className: 'footer-links' },
-          UI.el('a', { href: '#home' }, 'Home'),
-          ...(loggedIn ? [UI.el('a', { href: '#verify' }, 'Verify')] : []),
-          UI.el('a', { href: '#about' }, 'About'),
-          UI.el('a', { href: '#contact' }, 'Contact'),
-        )
-      )
-    );
-    const wrapper = UI.el('div', { className: 'pub-wrapper' }, nav, content, footer);
-    requestAnimationFrame(() => {
-      const r = bodyFn();
-      if (r && typeof r.then === 'function') {
-        content.innerHTML = '<div class="spinner" style="margin:80px auto"></div>';
-        r.then(h => { content.innerHTML = ''; content.appendChild(h); }).catch(e => { content.innerHTML = `<div class="empty-state" style="margin:80px auto"><p>Error: ${e.message}</p></div>`; });
-      } else if (r) content.appendChild(r);
-    });
-    return wrapper;
+    };
+    window.addEventListener('hashchange', UI._navCloseHandler);
+    return nav;
   },
 
-  layout: (title, bodyFn) => {
+  buildSidebar: () => {
     const user = Auth.getUser();
     const loggedIn = Auth.isLoggedIn();
     const nav = [
@@ -309,13 +291,17 @@ const UI = {
       { icon: '\u{2699}\uFE0F', label: 'Settings', href: '#settings' },
     ].filter(item => !item.loginOnly || loggedIn);
     const curHash = window.location.hash;
-    const sidebar = UI.el('div', { className: 'sidebar' },
-      UI.el('div', { className: 'sidebar-brand' }, 'Food', UI.el('span', {}, 'Track')),
+    const isActive = (href) => curHash.startsWith(href) || (href === '#food-items' && curHash.startsWith('#food-item'));
+    return UI.el('aside', { className: 'sidebar sidebar-collapsed' },
+      UI.el('div', { className: 'sidebar-brand' },
+        UI.el('span', { className: 'brand-mark' }, '🌿'),
+        UI.el('span', { className: 'brand-text' }, 'Food', UI.el('span', {}, 'Track'))
+      ),
       UI.el('div', { className: 'sidebar-nav' },
         ...nav.map(item =>
-          UI.el('a', { href: item.href, className: 'sidebar-link ' + (curHash.startsWith(item.href) ? 'active' : '') },
+          UI.el('a', { href: item.href, className: 'sidebar-link ' + (isActive(item.href) ? 'active' : '') },
             UI.el('span', { className: 'icon' }, item.icon),
-            item.label
+            UI.el('span', { className: 'label' }, item.label)
           )
         )
       ),
@@ -326,7 +312,47 @@ const UI = {
           : UI.btn('Login', 'btn-primary btn-sm', () => Router.navigate('#login'))
       )
     );
+  },
+
+  publicLayout: (bodyFn) => {
+    const loggedIn = Auth.isLoggedIn();
+    const content = UI.el('div', { className: 'pub-content' });
+    const footer = UI.el('footer', { className: 'pub-footer' },
+      UI.el('div', { className: 'footer-inner' },
+        UI.el('div', {}, '\u00a9 2026 FoodTrack. All rights reserved.'),
+        UI.el('div', { className: 'footer-links' },
+          UI.el('a', { href: '#home' }, 'Home'),
+          ...(loggedIn ? [UI.el('a', { href: '#verify' }, 'Verify')] : []),
+          UI.el('a', { href: '#about' }, 'About'),
+          UI.el('a', { href: '#contact' }, 'Contact'),
+        )
+      )
+    );
+    const wrapper = UI.el('div', { className: 'app-shell' },
+      UI.buildMainNav(),
+      UI.el('div', { className: 'app-body' },
+        UI.buildSidebar(),
+        UI.el('div', { className: 'main-content' }, content)
+      ),
+      footer
+    );
+    requestAnimationFrame(() => {
+      const r = bodyFn();
+      if (r && typeof r.then === 'function') {
+        content.innerHTML = '<div class="spinner" style="margin:80px auto"></div>';
+        r.then(h => { content.innerHTML = ''; content.appendChild(h); }).catch(e => { content.innerHTML = `<div class="empty-state" style="margin:80px auto"><p>Error: ${e.message}</p></div>`; });
+      } else if (r) content.appendChild(r);
+    });
+    return wrapper;
+  },
+
+  layout: (title, bodyFn) => {
+    const toggleSidebar = () => {
+      document.querySelector('.sidebar')?.classList.toggle('open');
+      document.querySelector('.sidebar-overlay')?.classList.toggle('open');
+    };
     const header = UI.el('div', { className: 'topbar' },
+      UI.el('button', { className: 'mobile-toggle', html: '&#9776;', onClick: toggleSidebar }),
       UI.el('h2', {}, title || 'FoodTrack'),
       UI.el('div', { id: 'topbar-search', className: 'topbar-actions', style: 'flex:1;max-width:500px;display:flex;gap:6px;align-items:center' },
         UI.el('div', { style: 'flex:1;min-width:180px' }, UI.autocompleteSearchInput('Quick search items, batches...')),
@@ -339,7 +365,14 @@ const UI = {
     );
     const pageContent = UI.el('div', { className: 'page-content', id: 'page-content' });
     const main = UI.el('div', { className: 'main-content' }, header, pageContent);
-    const layout = UI.el('div', { className: 'app-layout' }, sidebar, main);
+    const wrapper = UI.el('div', { className: 'app-shell' },
+      UI.buildMainNav(),
+      UI.el('div', { className: 'app-body' },
+        UI.buildSidebar(),
+        main
+      ),
+      UI.el('div', { className: 'sidebar-overlay', onClick: toggleSidebar })
+    );
     requestAnimationFrame(() => {
       const r = bodyFn();
       if (r && typeof r.then === 'function') {
@@ -354,6 +387,6 @@ const UI = {
         });
       }
     });
-    return layout;
+    return wrapper;
   },
 };

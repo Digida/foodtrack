@@ -1501,7 +1501,7 @@ Pages.taxonomyItemDetail = (app, id) => {
         <div class="card-header"><h3>${item.common_name}</h3>
           <span class="badge badge-info">${item.code}</span>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="inv-grid">
           <div>
             <div class="info-row"><div class="info-label">Scientific Name</div><div class="info-value"><em>${item.scientific_name || '—'}</em></div></div>
             <div class="info-row"><div class="info-label">Genre</div><div class="info-value">${item.genre || '—'}</div></div>
@@ -1539,7 +1539,7 @@ Pages.batches = (app) => {
     const load = async (page = 1) => {
       const data = await API.get('/batches?page=' + page);
       const el = document.getElementById('batches-content');
-      let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      let html = `<div class="list-header">
         <p style="color:var(--text-light)">${data.total} batch(es)</p>
         <button class="btn btn-primary btn-sm" id="add-batch-btn">+ New Batch</button></div>`;
       if (!data.batches || data.batches.length === 0) {
@@ -1641,7 +1641,7 @@ Pages.warehouses = (app) => {
     const load = async (page = 1) => {
       const data = await API.get('/warehouses?page=' + page);
       const el = document.getElementById('warehouses-content');
-      let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      let html = `<div class="list-header">
         <p style="color:var(--text-light)">${data.total} warehouse(s)</p>
         <button class="btn btn-primary btn-sm" id="add-wh-btn">+ New Warehouse</button></div>
         <div class="card-grid card-grid-3">`;
@@ -1765,7 +1765,7 @@ Pages.shipments = (app) => {
     const load = async (page = 1) => {
       const data = await API.get('/shipments?page=' + page);
       const el = document.getElementById('shipments-content');
-      let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      let html = `<div class="list-header">
         <p style="color:var(--text-light)">${data.total} shipment(s)</p>
         <button class="btn btn-primary btn-sm" id="add-ship-btn">+ New Shipment</button></div>`;
       if (!data.shipments || data.shipments.length === 0) {
@@ -1934,7 +1934,7 @@ Pages.collections = (app) => {
   app.appendChild(UI.layout('Collections', async () => {
     const data = await API.get('/collections');
     const body = document.createElement('div');
-    let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    let html = `<div class="list-header">
       <p style="color:var(--text-light)">${data.total} collection(s)</p>
       <div style="display:flex;gap:8px">
         <button class="btn btn-outline btn-sm" onclick="Router.navigate('#feeds')">🤖 AI Feeds</button>
@@ -2067,7 +2067,7 @@ Pages.feeds = (app) => {
     const body = document.createElement('div');
     try {
       const data = await API.get('/collections/feeds/list');
-      let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      let html = `<div class="list-header">
         <p style="color:var(--text-light)">${data.feeds.length} feed source(s)</p>
         <button class="btn btn-primary btn-sm" id="add-feed-btn">+ New Feed Source</button></div>`;
       if (data.feeds.length === 0) {
@@ -2258,7 +2258,7 @@ Pages.foodItems = (app) => {
     const data = await API.get('/taxonomy/items/grouped/by-category');
     const body = document.createElement('div');
 
-    let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    let html = `<div class="list-header">
       <p style="color:var(--text-light)">${data.total_items} food items across ${data.total_categories} categories</p>
       <input id="food-search-input" class="fi" placeholder="🔍 Filter by name, scientific, family..." style="max-width:320px">
     </div>`;
@@ -2457,7 +2457,7 @@ Pages.cargoTrackingDetail = (app, id) => {
             <span class="badge ${statusCls[s.status] || 'badge-secondary'}">${(s.status_label || s.status).replace(/_/g, ' ')}</span>
           </div>
         </div>
-        <div class="info-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+        <div class="info-grid" style="margin-top:12px">
           <div class="info-row"><div class="info-label">Origin</div><div class="info-value">${s.origin ? s.origin.name + (s.origin.city ? ' (' + s.origin.city + ')' : '') : '—'}</div></div>
           <div class="info-row"><div class="info-label">Destination</div><div class="info-value">${s.destination ? s.destination.name + (s.destination.city ? ' (' + s.destination.city + ')' : '') : '—'}</div></div>
           <div class="info-row"><div class="info-label">Carrier</div><div class="info-value">${s.carrier_name || '—'}${s.carrier_ref ? ' · Ref: ' + s.carrier_ref : ''}</div></div>
@@ -2469,7 +2469,7 @@ Pages.cargoTrackingDetail = (app, id) => {
         </div>
         ${s.notes ? `<div style="margin-top:12px;padding:8px;background:var(--bg-card);border-radius:6px;font-size:13px;color:var(--text-light)">📝 ${s.notes}</div>` : ''}
       </div>
-      <div class="inv-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+      <div class="inv-grid" style="margin-top:16px">
         <div class="card">
           <div class="card-header"><h3>📦 Products in Shipment (${(s.products || []).length})</h3></div>
           ${productsHtml}
