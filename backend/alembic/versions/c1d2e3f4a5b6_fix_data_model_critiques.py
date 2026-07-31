@@ -46,14 +46,31 @@ def _index_exists(name: str, table: str) -> bool:
     return any(i["name"] == name for i in inspect(bind).get_indexes(table))
 
 
+def _column_is_string(table: str, column: str) -> bool:
+    bind = op.get_bind()
+    if not _table_exists(table):
+        return False
+    cols = {c["name"]: c for c in inspect(bind).get_columns(table)}
+    if column not in cols:
+        return False
+    col_type = str(cols[column]["type"]).lower()
+    return "char" in col_type or "text" in col_type
+
+
 def upgrade() -> None:
     sqlite = _is_sqlite()
 
     # ── suppliers: is_active String(1) -> Boolean ─────────────────────────
-    if _table_exists("suppliers"):
-        # Normalise existing "Y"/"N" strings to 1/0 first
-        op.execute("UPDATE suppliers SET is_active = 1 WHERE is_active = 'Y' OR is_active = 'true'")
-        op.execute("UPDATE suppliers SET is_active = 0 WHERE is_active != 1")
+    # Only needed on legacy DBs where the column is still String(1).
+    # base_schema already creates it as Boolean — skip entirely there,
+    # otherwise "UPDATE ... SET is_active = 1" fails on a boolean column.
+    if _table_exists("suppliers") and _column_is_string("suppliers", "is_active"):
+        # Normalise existing "Y"/"N" strings to "1"/"0" first
+        op.execute("UPDATE suppliers SET is_active = '1' WHERE is_active IN ('Y', 'y', 'true', '1')")
+        op.execute(
+            "UPDATE suppliers SET is_active = '0' "
+            "WHERE is_active IS NOT NULL AND is_active NOT IN ('Y', 'y', 'true', '1')"
+        )
         with op.batch_alter_table("suppliers", recreate="always" if sqlite else "auto") as batch_op:
             batch_op.alter_column(
                 "is_active",
@@ -63,9 +80,12 @@ def upgrade() -> None:
             )
 
     # ── cargo_policies: is_active String(1) -> Boolean ────────────────────
-    if _table_exists("cargo_policies") and _column_exists("cargo_policies", "is_active"):
-        op.execute("UPDATE cargo_policies SET is_active = 1 WHERE is_active = 'Y' OR is_active = 'true'")
-        op.execute("UPDATE cargo_policies SET is_active = 0 WHERE is_active != 1")
+    if _table_exists("cargo_policies") and _column_is_string("cargo_policies", "is_active"):
+        op.execute("UPDATE cargo_policies SET is_active = '1' WHERE is_active IN ('Y', 'y', 'true', '1')")
+        op.execute(
+            "UPDATE cargo_policies SET is_active = '0' "
+            "WHERE is_active IS NOT NULL AND is_active NOT IN ('Y', 'y', 'true', '1')"
+        )
         with op.batch_alter_table("cargo_policies", recreate="always" if sqlite else "auto") as batch_op:
             batch_op.alter_column(
                 "is_active",
