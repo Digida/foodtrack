@@ -177,7 +177,7 @@ Pages.contact = (app) => {
           </div>
         </div>
       </section>`;
-    document.getElementById('c-btn').onclick = async () => {
+    wrapper.querySelector('#c-btn').onclick = async () => {
       if (!UI.validateForm({
         'c-name': { required: true, message: 'Name required' },
         'c-email': { required: true, type: 'email' },
@@ -225,8 +225,8 @@ Pages.verify = (app) => {
           <div id="v-scan-result" style="margin-top:16px"></div>
         </div>
       </section>`;
-    document.getElementById('v-btn').onclick = () => lookup(document.getElementById('v-q').value.trim());
-    document.getElementById('v-q').addEventListener('keydown', e => { if (e.key === 'Enter') lookup(e.target.value.trim()); });
+    wrapper.querySelector('#v-btn').onclick = () => lookup(wrapper.querySelector('#v-q').value.trim());
+    wrapper.querySelector('#v-q').addEventListener('keydown', e => { if (e.key === 'Enter') lookup(e.target.value.trim()); });
 
     async function lookup(query) {
       if (!query) return;
@@ -588,7 +588,7 @@ Pages.taxonomyDetail = (app, id) => {
 
     renderTreeView();
 
-    document.getElementById('add-node-btn')?.addEventListener('click', () => {
+    body.querySelector('#add-node-btn')?.addEventListener('click', () => {
       const m = UI.modal('Add Category', `
         <div class="form-group"><label>Code</label><input id="nd-code" class="fi" placeholder="e.g. FRUITS"></div>
         <div class="form-group"><label>Name</label><input id="nd-name" class="fi" placeholder="e.g. Fruits"></div>
@@ -791,7 +791,7 @@ Pages.productDetail = (app, id) => {
               <div class="tl-sub">${[e.location_name, e.country].filter(Boolean).join(' · ')} · ${new Date(e.event_timestamp).toLocaleString()}</div>
               <div class="tl-desc">${e.handler_name}${e.handler_organization ? ' ('+e.handler_organization+')' : ''}${e.temperature_celsius ? ' · '+e.temperature_celsius+'°C' : ''}${e.humidity_percent ? ' · '+e.humidity_percent+'% RH' : ''}</div>
             </div>`).join('')}</div>`}</div>`;
-    document.getElementById('delete-product-btn')?.addEventListener('click', async () => {
+    body.querySelector('#delete-product-btn')?.addEventListener('click', async () => {
       if (await UI.confirm('Delete Product', `Are you sure you want to delete "${p.name}" (${p.sku})? This cannot be undone.`)) {
         try {
           await API.del(`/products/${id}`);
@@ -800,7 +800,7 @@ Pages.productDetail = (app, id) => {
         } catch (e) { UI.showError(e.message); }
       }
     });
-    document.getElementById('edit-product-btn').onclick = () => Pages.showEditProduct(id, p);
+    body.querySelector('#edit-product-btn').onclick = () => Pages.showEditProduct(id, p);
     return body;
   }));
 };
@@ -868,7 +868,7 @@ Pages.traceability = (app) => {
           }
         });
     }).catch(() => { document.getElementById('recent-events').innerHTML = '<div class="empty-state"><p>Could not load recent events</p></div>'; });
-    document.getElementById('trace-btn').onclick = async () => {
+    body.querySelector('#trace-btn').onclick = async () => {
       const q = document.getElementById('trace-q').value.trim();
       if (!q) return;
       const r = document.getElementById('trace-result');
@@ -887,7 +887,7 @@ Pages.traceability = (app) => {
         </div>`;
       } catch (e) { r.innerHTML = `<div class="scan-result" style="background:#f8d7da;color:#721c24">${e.message}</div>`; }
     };
-    document.getElementById('trace-q').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('trace-btn').click(); });
+    body.querySelector('#trace-q').addEventListener('keydown', e => { if (e.key === 'Enter') body.querySelector('#trace-btn').click(); });
     return body;
   }));
 };
@@ -975,7 +975,7 @@ Pages.certificateDetail = (app, id) => {
         ['Document', c.document_url ? `<a href="${c.document_url}" target="_blank">View</a>` : '—'],
       ].map(([k,v]) => `<tr><td style="padding:6px 0;color:#6b7280;width:160px">${k}</td><td style="padding:6px 0"><strong>${v}</strong></td></tr>`).join('')}</table></div>
       ${c.description ? `<div class="card" style="margin-top:16px"><h3 style="margin-bottom:8px;font-size:16px">Description</h3><p>${c.description}</p></div>` : ''}`;
-    document.getElementById('revoke-cert-btn')?.addEventListener('click', async () => {
+    body.querySelector('#revoke-cert-btn')?.addEventListener('click', async () => {
       if (await UI.confirm('Revoke Certificate', `Revoke certificate ${c.certificate_id}? This action cannot be undone.`)) {
         try {
           await API.post(`/certificates/${id}/revoke`);
@@ -1036,9 +1036,9 @@ Pages.analytics = (app) => {
           <table><thead><tr><th>Status</th><th>Count</th></tr></thead>
           <tbody>${certs.statuses.map(s => `<tr><td><span class="badge ${s.status==='verified'?'badge-success':s.status==='issued'?'badge-info':s.status==='revoked'?'badge-danger':'badge-secondary'}">${s.status.toUpperCase()}</span></td><td><strong>${s.count}</strong></td></tr>`).join('')}</tbody></table></div>
       </div>`;
-    document.getElementById('csv-cats')?.addEventListener('click', () => UI.exportCSV(cats.categories, 'category', 'count', 'categories.csv'));
-    document.getElementById('csv-evts')?.addEventListener('click', () => UI.exportCSV(evts.event_types, 'type', 'count', 'events.csv'));
-    document.getElementById('csv-certs')?.addEventListener('click', () => UI.exportCSV(certs.statuses, 'status', 'count', 'certificates.csv'));
+    body.querySelector('#csv-cats')?.addEventListener('click', () => UI.exportCSV(cats.categories, 'category', 'count', 'categories.csv'));
+    body.querySelector('#csv-evts')?.addEventListener('click', () => UI.exportCSV(evts.event_types, 'type', 'count', 'events.csv'));
+    body.querySelector('#csv-certs')?.addEventListener('click', () => UI.exportCSV(certs.statuses, 'status', 'count', 'certificates.csv'));
     return body;
   }));
 };
@@ -1063,7 +1063,7 @@ Pages.share = (app) => {
           <button id="scan-stop" class="btn btn-outline" style="display:none">Stop</button></div>
           <div id="scan-result" style="margin-top:12px"></div>
         </div></div>`;
-    document.getElementById('share-gen').onclick = async () => {
+    body.querySelector('#share-gen').onclick = async () => {
       if (!UI.validateForm({ 'share-sku': { required: true, message: 'SKU required' } })) return;
       const sku = document.getElementById('share-sku').value.trim();
       try {
@@ -1083,7 +1083,7 @@ Pages.share = (app) => {
           </div>`;
       } catch (e) { UI.showError(e.message); }
     };
-    document.getElementById('peer-btn').onclick = async () => {
+    body.querySelector('#peer-btn').onclick = async () => {
       if (!UI.validateForm({ 'peer-id': { required: true, pattern: /^\d+$/, message: 'Valid product ID required' } })) return;
       const pid = document.getElementById('peer-id').value.trim();
       try {
@@ -1166,7 +1166,7 @@ Pages.share = (app) => {
       };
     };
 
-    document.getElementById('scan-start').onclick = async () => {
+    body.querySelector('#scan-start').onclick = async () => {
       try {
         if (!('BarcodeDetector' in window)) await loadJsQR();
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
@@ -1196,7 +1196,7 @@ Pages.share = (app) => {
       } catch (e) { UI.showError('Camera access denied: ' + e.message); }
     };
 
-    document.getElementById('scan-stop').onclick = stopScanning;
+    body.querySelector('#scan-stop').onclick = stopScanning;
     return body;
   }));
 };
@@ -1204,6 +1204,10 @@ Pages.share = (app) => {
 // ─── SETTINGS + ADMIN PANEL ───────────────────────────────────
 
 Pages.settings = (app) => {
+  if (!Auth.isLoggedIn()) {
+    Router.navigate('#login');
+    return;
+  }
   app.appendChild(UI.layout('Settings', async () => {
     const me = await API.get('/auth/me');
     const isAdmin = me.role === 'admin';
@@ -1236,8 +1240,8 @@ Pages.settings = (app) => {
         </div>
         <div id="admin-users-list">${renderAdminUsers(usersData)}</div>
       </div>` : ''}`;
-    document.getElementById('edit-profile-btn').onclick = () => Pages.showEditProfile(me);
-    document.getElementById('dark-toggle').onclick = () => {
+    body.querySelector('#edit-profile-btn').onclick = () => Pages.showEditProfile(me);
+    body.querySelector('#dark-toggle').onclick = () => {
       document.body.classList.toggle('dark');
       const isDark = document.body.classList.contains('dark');
       localStorage.setItem('ft_dark', isDark ? '1' : '0');
@@ -1376,7 +1380,7 @@ Pages.search = (app, query) => {
     let currentPage = 1;
 
     // Autocomplete on search page
-    const searchInput = document.getElementById('search-input');
+    const searchInput = body.querySelector('#search-input');
     let acTimeout = null;
     searchInput.addEventListener('input', () => {
       clearTimeout(acTimeout);
@@ -1386,8 +1390,8 @@ Pages.search = (app, query) => {
       if (e.key === 'Enter') { e.preventDefault(); doSearch(1); }
     });
 
-    document.getElementById('search-form').onsubmit = (e) => { e.preventDefault(); doSearch(1); };
-    document.getElementById('search-btn').onclick = () => doSearch(1);
+    body.querySelector('#search-form').onsubmit = (e) => { e.preventDefault(); doSearch(1); };
+    body.querySelector('#search-btn').onclick = () => doSearch(1);
 
     async function doSearch(page) {
       const val = document.getElementById('search-input').value.trim();
@@ -1472,7 +1476,7 @@ Pages.search = (app, query) => {
       }
     }
 
-    document.getElementById('search-filters').addEventListener('click', (e) => {
+    body.querySelector('#search-filters').addEventListener('click', (e) => {
       const btn = e.target.closest('.filter-btn');
       if (!btn) return;
       document.querySelectorAll('#search-filters .filter-btn').forEach(b => b.classList.remove('active'));
@@ -1481,7 +1485,7 @@ Pages.search = (app, query) => {
       doSearch(1);
     });
 
-    if (q) { document.getElementById('search-btn').click(); }
+    if (q) { body.querySelector('#search-btn').click(); }
     return body;
   }));
 };
@@ -1723,7 +1727,7 @@ Pages.warehouseDetail = (app, id) => {
         <tbody>${itemsHtml || '<tr><td colspan="6" style="text-align:center;color:var(--text-light)">No inventory</td></tr>'}</tbody></table></div>
       </div>
       <div style="margin-top:16px"><button class="btn btn-outline" onclick="Router.navigate('#warehouses')">Back to Warehouses</button></div>`;
-    document.getElementById('add-inv-btn')?.addEventListener('click', () => showAddInventory(id));
+    body.querySelector('#add-inv-btn')?.addEventListener('click', () => showAddInventory(id));
     return body;
   }));
 };
@@ -1876,8 +1880,8 @@ Pages.shipmentDetail = (app, id) => {
         <button class="btn btn-outline" onclick="Router.navigate('#shipments')">Back to Shipments</button>
         ${data.courier_url ? `<a href="${data.courier_url}" target="_blank" class="btn btn-accent">Track on Courier Site</a>` : ''}
       </div>`;
-    document.getElementById('add-batch-ship-btn')?.addEventListener('click', () => showAddBatchToShipment(id));
-    document.getElementById('add-tracking-btn')?.addEventListener('click', () => showAddTrackingEvent(id));
+    body.querySelector('#add-batch-ship-btn')?.addEventListener('click', () => showAddBatchToShipment(id));
+    body.querySelector('#add-tracking-btn')?.addEventListener('click', () => showAddTrackingEvent(id));
     return body;
   }));
 };
@@ -1956,7 +1960,7 @@ Pages.collections = (app) => {
     }
     html += '</div>';
     body.innerHTML = html;
-    document.getElementById('add-col-btn')?.addEventListener('click', () => {
+    body.querySelector('#add-col-btn')?.addEventListener('click', () => {
       const m = UI.modal('New Collection', `
         <div class="form-group"><label>Name</label><input id="col-name" class="fi" placeholder="Seasonal Produce"></div>
         <div class="form-group"><label>Description</label><textarea id="col-desc" class="fi" rows="2"></textarea></div>
@@ -2021,7 +2025,7 @@ Pages.collectionDetail = (app, id) => {
         <button class="btn btn-outline" onclick="Router.navigate('#search/' + encodeURIComponent('${data.name}'))">🔍 Search "${data.name}"</button>
         ${data.is_ai_generated ? `<button class="btn btn-accent" onclick="Router.navigate('#feeds')">🤖 Manage AI Feeds</button>` : ''}
       </div>`;
-    document.getElementById('add-col-item-btn')?.addEventListener('click', () => {
+    body.querySelector('#add-col-item-btn')?.addEventListener('click', () => {
       const m = UI.modal('Add Item', `
         <div class="form-group"><label>Taxonomy Item ID or Code</label>
           <div style="display:flex;gap:8px"><input id="ci-item-id" type="number" class="fi" placeholder="Item ID" style="flex:1">
@@ -2131,7 +2135,7 @@ Pages.setupTOTP = async () => {
           <button class="btn btn-primary" id="totp-verify-btn">Verify</button>
         </div>
       </div>`;
-    document.getElementById('totp-verify-btn').onclick = async () => {
+    body.querySelector('#totp-verify-btn').onclick = async () => {
       try {
         await API.post('/auth/verify-totp', { code: document.getElementById('totp-code').value });
         UI.showSuccess('TOTP enabled successfully');
@@ -2296,7 +2300,7 @@ Pages.foodItems = (app) => {
     });
 
     // Client-side search filter
-    document.getElementById('food-search-input').addEventListener('input', function() {
+    body.querySelector('#food-search-input').addEventListener('input', function() {
       const q = this.value.toLowerCase().trim();
       document.querySelectorAll('.food-item-card').forEach(card => {
         const txt = card.dataset.search || '';
@@ -2415,8 +2419,8 @@ Pages.cargoTracking = (app) => {
       }
     }
 
-    document.getElementById('cargo-search-form').onsubmit = (e) => { e.preventDefault(); doCargoSearch(1); };
-    document.getElementById('cs-btn').onclick = () => doCargoSearch(1);
+    body.querySelector('#cargo-search-form').onsubmit = (e) => { e.preventDefault(); doCargoSearch(1); };
+    body.querySelector('#cs-btn').onclick = () => doCargoSearch(1);
 
     _setSEO('Cargo Tracking — FoodTrack', 'Search and filter cargo shipments by source, destination, port, carrier, vessel, ferry route, arrival date and more.');
     return body;

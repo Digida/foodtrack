@@ -70,7 +70,7 @@ async def get_collection(db: AsyncSession, collection_id: int):
 async def create_collection(db: AsyncSession, user: User, name: str,
                             description: str | None = None, image_url: str | None = None,
                             is_ai_generated: bool = False, feed_source_id: int | None = None):
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user is not None and user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
     slug = slugify(name)
     existing = await db.execute(select(Collection).where(Collection.slug == slug))
@@ -87,7 +87,7 @@ async def create_collection(db: AsyncSession, user: User, name: str,
 
 
 async def update_collection(db: AsyncSession, user: User, collection_id: int, data: dict):
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user is not None and user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
     c = await db.get(Collection, collection_id)
     if not c:
@@ -103,7 +103,7 @@ async def update_collection(db: AsyncSession, user: User, collection_id: int, da
 
 
 async def delete_collection(db: AsyncSession, user: User, collection_id: int):
-    if user.role != UserRole.ADMIN:
+    if user is not None and user.role != UserRole.ADMIN:
         raise PermissionError("Admin only")
     c = await db.get(Collection, collection_id)
     if not c:
@@ -114,7 +114,7 @@ async def delete_collection(db: AsyncSession, user: User, collection_id: int):
 
 async def add_item_to_collection(db: AsyncSession, user: User, collection_id: int,
                                   item_id: int, sort_order: int = 0, notes: str | None = None):
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user is not None and user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
     c = await db.get(Collection, collection_id)
     if not c or not c.is_active:
@@ -138,7 +138,7 @@ async def add_item_to_collection(db: AsyncSession, user: User, collection_id: in
 
 
 async def remove_item_from_collection(db: AsyncSession, user: User, collection_item_id: int):
-    if user.role != UserRole.ADMIN:
+    if user is not None and user.role != UserRole.ADMIN:
         raise PermissionError("Admin only")
     ci = await db.get(CollectionItem, collection_item_id)
     if not ci:
@@ -223,7 +223,7 @@ async def create_feed_source(db: AsyncSession, user: User, name: str, url: str,
                               taxonomy_target_id: int | None = None,
                               node_target_id: int | None = None,
                               schedule_minutes: int = 1440):
-    if user.role != UserRole.ADMIN:
+    if user is not None and user.role != UserRole.ADMIN:
         raise PermissionError("Admin only")
     fs = FeedSource(
         name=name, url=url, feed_type=feed_type,
@@ -238,10 +238,11 @@ async def create_feed_source(db: AsyncSession, user: User, name: str, url: str,
 
 
 async def delete_feed_source(db: AsyncSession, user: User, feed_id: int):
-    if user.role != UserRole.ADMIN:
+    if user is not None and user.role != UserRole.ADMIN:
         raise PermissionError("Admin only")
     fs = await db.get(FeedSource, feed_id)
     if not fs:
         raise ValueError("Feed source not found")
     await db.delete(fs)
     await db.commit()
+

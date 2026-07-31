@@ -15,7 +15,7 @@ from app.services.shipping_service import (
     add_batch_to_shipment, add_shipment_tracking_event, delete_shipment,
     _enrich_shipment,
 )
-from app.utils.dependencies import get_current_user
+from app.utils.dependencies import get_current_user, get_current_user_or_guest
 
 router = APIRouter(prefix="/shipments", tags=["shipments"])
 
@@ -36,6 +36,7 @@ async def api_search_shipments(
     departure_date_from: str | None = Query(None, alias="departure_from"),
     departure_date_to: str | None = Query(None, alias="departure_to"),
     page: int = Query(1, ge=1),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Advanced cargo tracking search with multiple filters."""
@@ -164,7 +165,6 @@ async def api_list_shipments(
     page: int = Query(1, ge=1),
     status: str | None = None,
     mode: str | None = None,
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await list_shipments(db, page, status, mode)
@@ -173,7 +173,6 @@ async def api_list_shipments(
 @router.get("/{shipment_id}")
 async def api_get_shipment(
     shipment_id: int,
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     s = await get_shipment(db, shipment_id)
@@ -185,7 +184,7 @@ async def api_get_shipment(
 @router.post("")
 async def api_create_shipment(
     req: ShipmentCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -207,7 +206,7 @@ async def api_create_shipment(
 @router.put("/{shipment_id}")
 async def api_update_shipment(
     shipment_id: int, req: ShipmentUpdate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -220,7 +219,7 @@ async def api_update_shipment(
 @router.post("/{shipment_id}/batches")
 async def api_add_batch_to_shipment(
     shipment_id: int, req: AddBatchRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -233,7 +232,7 @@ async def api_add_batch_to_shipment(
 @router.post("/{shipment_id}/tracking")
 async def api_add_tracking_event(
     shipment_id: int, req: TrackingEventCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -255,7 +254,7 @@ class ItemShipmentStatusUpdate(BaseModel):
 @router.delete("/{shipment_id}")
 async def api_delete_shipment(
     shipment_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -269,7 +268,7 @@ async def api_delete_shipment(
 async def api_update_item_shipment_status(
     shipment_id: int,
     req: ItemShipmentStatusUpdate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     sb = await db.execute(
@@ -289,3 +288,4 @@ async def api_update_item_shipment_status(
         "batch_id": req.batch_id,
         "item_shipment_status": sb_row.item_shipment_status.value if hasattr(sb_row.item_shipment_status, 'value') else str(sb_row.item_shipment_status),
     }
+

@@ -146,6 +146,7 @@ async def unified_search(
     sort_by: str = "relevance",
     user_id: int | None = None,
     ip_address: str | None = None,
+    include_batches: bool = True,
 ) -> dict:
     start = time.monotonic()
     term = f"%{q}%"
@@ -226,7 +227,7 @@ async def unified_search(
             if cat:
                 facets["categories"][cat] = facets["categories"].get(cat, 0) + 1
 
-    if entity_type in (None, "batches"):
+    if include_batches and entity_type in (None, "batches"):
         batch_total, batches = await search_batches(db, term, term_lower, limit, offset)
         total += batch_total
         for b in batches:
@@ -591,7 +592,7 @@ async def search_collections(
     return total, result
 
 
-async def autocomplete_search(db: AsyncSession, q: str, limit: int = 8) -> list[dict]:
+async def autocomplete_search(db: AsyncSession, q: str, limit: int = 8, include_batches: bool = True) -> list[dict]:
     term = f"%{q}%"
     results: list[dict] = []
     seen: set[str] = set()
@@ -671,19 +672,20 @@ async def autocomplete_search(db: AsyncSession, q: str, limit: int = 8) -> list[
         .where(Batch.batch_number.ilike(term))
         .limit(limit)
     )
-    for b in (await db.execute(bq)).scalars().all():
-        key = f"batch_{b.id}"
-        if key in seen:
-            continue
-        seen.add(key)
-        results.append({
-            "type": "batch",
-            "id": b.id,
-            "label": f"Batch {b.batch_number}",
-            "subtitle": "",
-            "url": f"#batches/{b.id}",
-            "image_url": None,
-        })
+    if include_batches:
+        for b in (await db.execute(bq)).scalars().all():
+            key = f"batch_{b.id}"
+            if key in seen:
+                continue
+            seen.add(key)
+            results.append({
+                "type": "batch",
+                "id": b.id,
+                "label": f"Batch {b.batch_number}",
+                "subtitle": "",
+                "url": f"#batches/{b.id}",
+                "image_url": None,
+            })
 
     return results[:limit]
 

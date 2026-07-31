@@ -229,6 +229,7 @@ const UI = {
 
   publicLayout: (bodyFn) => {
     const curHash = window.location.hash || '#home';
+    const loggedIn = Auth.isLoggedIn();
     const isActive = (href) => curHash === href ? 'active' : '';
     const toggle = UI.el('button', { className: 'pub-toggle', html: '&#9776;' });
     const searchInput = UI.autocompleteSearchInput('Search items, products, batches...', '#search');
@@ -240,14 +241,16 @@ const UI = {
         UI.el('a', { href: '#home', className: 'pub-link ' + isActive('#home') }, 'Home'),
         UI.el('a', { href: '#search', className: 'pub-link ' + (curHash.startsWith('#search') ? 'active' : '') }, 'Search'),
         UI.el('a', { href: '#food-items', className: 'pub-link ' + (curHash.startsWith('#food-items') || curHash.startsWith('#food-item') ? 'active' : '') }, 'Food Items'),
-        UI.el('a', { href: '#verify', className: 'pub-link ' + isActive('#verify') }, 'Verify'),
-        UI.el('a', { href: '#cargo-tracking', className: 'pub-link ' + (curHash.startsWith('#cargo-tracking') ? 'active' : '') }, 'Cargo Tracking'),
+        ...(loggedIn ? [
+          UI.el('a', { href: '#verify', className: 'pub-link ' + isActive('#verify') }, 'Verify'),
+          UI.el('a', { href: '#cargo-tracking', className: 'pub-link ' + (curHash.startsWith('#cargo-tracking') ? 'active' : '') }, 'Cargo Tracking'),
+        ] : []),
         UI.el('a', { href: '#about', className: 'pub-link ' + isActive('#about') }, 'About'),
         UI.el('a', { href: '#contact', className: 'pub-link ' + isActive('#contact') }, 'Contact'),
       ),
       searchInput,
       UI.el('div', { className: 'pub-auth' },
-        Auth.isLoggedIn()
+        loggedIn
           ? UI.btn('Dashboard', 'btn-primary btn-sm', () => Router.navigate('#dashboard'))
           : [UI.btn('Login', 'btn-outline btn-sm', () => Router.navigate('#login')),
              UI.btn('Get Started', 'btn-primary btn-sm', () => Router.navigate('#login'))]
@@ -268,7 +271,7 @@ const UI = {
         UI.el('div', {}, '\u00a9 2026 FoodTrack. All rights reserved.'),
         UI.el('div', { className: 'footer-links' },
           UI.el('a', { href: '#home' }, 'Home'),
-          UI.el('a', { href: '#verify' }, 'Verify'),
+          ...(loggedIn ? [UI.el('a', { href: '#verify' }, 'Verify')] : []),
           UI.el('a', { href: '#about' }, 'About'),
           UI.el('a', { href: '#contact' }, 'Contact'),
         )
@@ -287,6 +290,7 @@ const UI = {
 
   layout: (title, bodyFn) => {
     const user = Auth.getUser();
+    const loggedIn = Auth.isLoggedIn();
     const nav = [
       { icon: '\u{1F4CA}', label: 'Dashboard', href: '#dashboard' },
       { icon: '\u{1F50D}', label: 'Search', href: '#search' },
@@ -297,13 +301,13 @@ const UI = {
       { icon: '\u{1F4C8}', label: 'Analytics', href: '#analytics' },
       { icon: '\u{1F4E4}', label: 'Share', href: '#share' },
       { icon: '\u{1FAB4}', label: 'Taxonomy', href: '#taxonomy' },
-      { icon: '\u{1F9F1}', label: 'Batches', href: '#batches' },
+      { icon: '\u{1F9F1}', label: 'Batches', href: '#batches', loginOnly: true },
       { icon: '\u{1F3E2}', label: 'Warehouses', href: '#warehouses' },
       { icon: '\u{1F6A2}', label: 'Shipments', href: '#shipments' },
-      { icon: '\u{1F69A}', label: 'Cargo Tracking', href: '#cargo-tracking' },
+      { icon: '\u{1F69A}', label: 'Cargo Tracking', href: '#cargo-tracking', loginOnly: true },
       { icon: '\u{1F4E6}', label: 'Collections', href: '#collections' },
       { icon: '\u{2699}\uFE0F', label: 'Settings', href: '#settings' },
-    ];
+    ].filter(item => !item.loginOnly || loggedIn);
     const curHash = window.location.hash;
     const sidebar = UI.el('div', { className: 'sidebar' },
       UI.el('div', { className: 'sidebar-brand' }, 'Food', UI.el('span', {}, 'Track')),
@@ -316,8 +320,10 @@ const UI = {
         )
       ),
       UI.el('div', { className: 'sidebar-footer' },
-        UI.el('div', { className: 'sidebar-user' }, user?.name || ''),
-        UI.btn('Logout', 'btn-outline btn-sm', () => Auth.logout())
+        UI.el('div', { className: 'sidebar-user' }, loggedIn ? (user?.name || '') : 'Guest'),
+        loggedIn
+          ? UI.btn('Logout', 'btn-outline btn-sm', () => Auth.logout())
+          : UI.btn('Login', 'btn-primary btn-sm', () => Router.navigate('#login'))
       )
     );
     const header = UI.el('div', { className: 'topbar' },

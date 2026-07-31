@@ -4,7 +4,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.database import get_db
-from app.models.user import User
 from app.models.taxonomy import Taxonomy, TaxonomyNode, TaxonomyItem, ItemName, ItemAttribute
 from app.services.taxonomy_service import (
     list_taxonomies, get_taxonomy, get_taxonomy_tree,
@@ -13,7 +12,6 @@ from app.services.taxonomy_service import (
     create_item, update_item, list_items,
 )
 from app.services.search_service import get_taxonomy_item_detail, get_taxonomy_item_by_code
-from app.utils.dependencies import get_current_user
 
 router = APIRouter(prefix="/taxonomy", tags=["taxonomy"])
 
@@ -166,11 +164,10 @@ async def api_get_tree(
 @router.post("")
 async def api_create_taxonomy(
     req: TaxonomyCreate,
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        t = await create_taxonomy(db, user, req.name, req.description, req.icon)
+        t = await create_taxonomy(db, req.name, req.description, req.icon)
         return {"id": t.id, "name": t.name, "icon": t.icon, "description": t.description}
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=400 if isinstance(e, ValueError) else 403, detail=str(e))
@@ -179,11 +176,10 @@ async def api_create_taxonomy(
 @router.put("/{taxonomy_id}")
 async def api_update_taxonomy(
     taxonomy_id: int, req: TaxonomyUpdate,
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        t = await update_taxonomy(db, user, taxonomy_id, req.model_dump(exclude_unset=True))
+        t = await update_taxonomy(db, taxonomy_id, req.model_dump(exclude_unset=True))
         return {"id": t.id, "name": t.name}
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=404 if isinstance(e, ValueError) else 403, detail=str(e))
@@ -192,11 +188,10 @@ async def api_update_taxonomy(
 @router.delete("/{taxonomy_id}")
 async def api_delete_taxonomy(
     taxonomy_id: int,
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        await delete_taxonomy(db, user, taxonomy_id)
+        await delete_taxonomy(db, taxonomy_id)
         return {"deleted": True}
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=404 if isinstance(e, ValueError) else 403, detail=str(e))
@@ -207,11 +202,10 @@ async def api_delete_taxonomy(
 @router.post("/{taxonomy_id}/nodes")
 async def api_create_node(
     taxonomy_id: int, req: NodeCreate,
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        n = await create_node(db, user, taxonomy_id, req.code, req.name, req.parent_id, req.description, req.sort_order)
+        n = await create_node(db, taxonomy_id, req.code, req.name, req.parent_id, req.description, req.sort_order)
         return {"id": n.id, "code": n.code, "name": n.name}
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=400 if isinstance(e, ValueError) else 403, detail=str(e))
@@ -220,11 +214,10 @@ async def api_create_node(
 @router.put("/nodes/{node_id}")
 async def api_update_node(
     node_id: int, req: NodeUpdate,
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        n = await update_node(db, user, node_id, req.model_dump(exclude_unset=True))
+        n = await update_node(db, node_id, req.model_dump(exclude_unset=True))
         return {"id": n.id, "name": n.name}
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=404 if isinstance(e, ValueError) else 403, detail=str(e))
@@ -233,11 +226,10 @@ async def api_update_node(
 @router.delete("/nodes/{node_id}")
 async def api_delete_node(
     node_id: int,
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        await delete_node(db, user, node_id)
+        await delete_node(db, node_id)
         return {"deleted": True}
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=404 if isinstance(e, ValueError) else 403, detail=str(e))
@@ -257,12 +249,11 @@ async def api_get_node_items(
 @router.post("/items")
 async def api_create_item(
     req: ItemCreate,
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:
         item = await create_item(
-            db, user, req.node_id, req.code, req.common_name,
+            db, req.node_id, req.code, req.common_name,
             req.scientific_name, req.genre, req.description, req.image_url,
         )
         return {"id": item.id, "code": item.code, "common_name": item.common_name}
@@ -295,11 +286,10 @@ async def api_get_item_by_code(
 @router.put("/items/{item_id}")
 async def api_update_item(
     item_id: int, req: ItemUpdate,
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        item = await update_item(db, user, item_id, req.model_dump(exclude_unset=True))
+        item = await update_item(db, item_id, req.model_dump(exclude_unset=True))
         return {"id": item.id}
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=404 if isinstance(e, ValueError) else 403, detail=str(e))
@@ -310,11 +300,8 @@ async def api_update_item(
 @router.post("/items/{item_id}/names")
 async def api_add_name(
     item_id: int, req: NameCreate,
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if user.role == "viewer":
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
     item = await db.get(TaxonomyItem, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -330,11 +317,8 @@ async def api_add_name(
 @router.post("/items/{item_id}/attributes")
 async def api_add_attribute(
     item_id: int, req: AttributeCreate,
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if user.role == "viewer":
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
     item = await db.get(TaxonomyItem, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")

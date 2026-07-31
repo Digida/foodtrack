@@ -9,7 +9,7 @@ from app.services.collection_service import (
     delete_collection, add_item_to_collection, remove_item_from_collection,
     list_feed_sources, create_feed_source, delete_feed_source, run_ai_feed,
 )
-from app.utils.dependencies import get_current_user
+from app.utils.dependencies import get_current_user_or_guest
 
 router = APIRouter(prefix="/collections", tags=["collections"])
 
@@ -66,7 +66,7 @@ async def api_get_collection(
 @router.post("")
 async def api_create_collection(
     req: CollectionCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -82,7 +82,7 @@ async def api_create_collection(
 @router.put("/{collection_id}")
 async def api_update_collection(
     collection_id: int, req: CollectionUpdate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -95,7 +95,7 @@ async def api_update_collection(
 @router.delete("/{collection_id}")
 async def api_delete_collection(
     collection_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -108,7 +108,7 @@ async def api_delete_collection(
 @router.post("/{collection_id}/items")
 async def api_add_item(
     collection_id: int, req: AddItemRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -121,7 +121,7 @@ async def api_add_item(
 @router.delete("/items/{collection_item_id}")
 async def api_remove_item(
     collection_item_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -133,18 +133,15 @@ async def api_remove_item(
 
 @router.get("/feeds/list")
 async def api_list_feeds(
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
     return {"feeds": await list_feed_sources(db)}
 
 
 @router.post("/feeds")
 async def api_create_feed(
     req: FeedSourceCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -160,11 +157,8 @@ async def api_create_feed(
 @router.post("/feeds/{feed_id}/run")
 async def api_run_feed(
     feed_id: int,
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
     try:
         result = await run_ai_feed(db, feed_id)
         return result
@@ -175,7 +169,7 @@ async def api_run_feed(
 @router.delete("/feeds/{feed_id}")
 async def api_delete_feed(
     feed_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -183,3 +177,4 @@ async def api_delete_feed(
         return {"deleted": True}
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=404 if isinstance(e, ValueError) else 403, detail=str(e))
+

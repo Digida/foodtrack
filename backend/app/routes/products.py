@@ -10,7 +10,7 @@ from app.services.product_service import (
     update_product, delete_product, get_product_by_sku,
 )
 from app.services.traceability_service import get_product_trace, serialize_event
-from app.utils.dependencies import get_current_user
+from app.utils.dependencies import get_current_user_or_guest
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -44,7 +44,7 @@ class ProductUpdateRequest(BaseModel):
 
 
 @router.post("")
-async def api_create_product(req: ProductCreateRequest, user: User = Depends(get_current_user),
+async def api_create_product(req: ProductCreateRequest, user: User = Depends(get_current_user_or_guest),
                               db: AsyncSession = Depends(get_db)):
     try:
         result = await create_product(
@@ -62,14 +62,14 @@ async def api_create_product(req: ProductCreateRequest, user: User = Depends(get
 async def api_list_products(
     skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200),
     category: ProductCategory | None = None,
-    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     products = await list_products(db, skip, limit, category)
     return {"products": products, "total": len(products)}
 
 
 @router.get("/{product_id}")
-async def api_get_product(product_id: int, user: User = Depends(get_current_user),
+async def api_get_product(product_id: int,
                            db: AsyncSession = Depends(get_db)):
     product = await get_product_detail(db, product_id)
     if not product:
@@ -93,7 +93,7 @@ async def api_get_product(product_id: int, user: User = Depends(get_current_user
 
 @router.put("/{product_id}")
 async def api_update_product(product_id: int, req: ProductUpdateRequest,
-                              user: User = Depends(get_current_user),
+                              user: User = Depends(get_current_user_or_guest),
                               db: AsyncSession = Depends(get_db)):
     try:
         await update_product(db, user, product_id, req.model_dump(exclude_none=True))
@@ -103,7 +103,7 @@ async def api_update_product(product_id: int, req: ProductUpdateRequest,
 
 
 @router.delete("/{product_id}")
-async def api_delete_product(product_id: int, user: User = Depends(get_current_user),
+async def api_delete_product(product_id: int, user: User = Depends(get_current_user_or_guest),
                               db: AsyncSession = Depends(get_db)):
     try:
         await delete_product(db, user, product_id)

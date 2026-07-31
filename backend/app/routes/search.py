@@ -42,6 +42,7 @@ async def api_search(
         collection_id, warehouse_id, sort_by,
         user_id=user.id if user else None,
         ip_address=request.client.host if request and request.client else None,
+        include_batches=user is not None,
     )
     return result
 
@@ -50,9 +51,23 @@ async def api_search(
 async def api_autocomplete(
     q: str = Query(..., min_length=1, max_length=100),
     limit: int = Query(8, ge=1, le=25),
+    request: Request = None,
     db: AsyncSession = Depends(get_db),
 ):
-    results = await autocomplete_search(db, q, limit)
+    user = None
+    if request:
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            try:
+                from app.services.auth_service import decode_access_token
+                payload = decode_access_token(auth[7:])
+                if payload and payload.get("sub"):
+                    uid = int(payload["sub"])
+                    r = await db.execute(select(User).where(User.id == uid))
+                    user = r.scalar_one_or_none()
+            except Exception:
+                pass
+    results = await autocomplete_search(db, q, limit, include_batches=user is not None)
     return {"results": results}
 
 

@@ -8,7 +8,7 @@ from app.models.traceability import EventType
 from app.services.traceability_service import (
     create_trace_event, get_product_trace, scan_trace, serialize_event,
 )
-from app.utils.dependencies import get_current_user
+from app.utils.dependencies import get_current_user_or_guest
 
 router = APIRouter(prefix="/traceability", tags=["traceability"])
 
@@ -30,7 +30,7 @@ class TraceEventCreateRequest(BaseModel):
 
 
 @router.post("")
-async def api_create_event(req: TraceEventCreateRequest, user: User = Depends(get_current_user),
+async def api_create_event(req: TraceEventCreateRequest, user: User = Depends(get_current_user_or_guest),
                             db: AsyncSession = Depends(get_db)):
     try:
         event = await create_trace_event(
@@ -45,7 +45,7 @@ async def api_create_event(req: TraceEventCreateRequest, user: User = Depends(ge
 
 
 @router.get("/product/{product_id}")
-async def api_get_product_trace(product_id: int, user: User = Depends(get_current_user),
+async def api_get_product_trace(product_id: int,
                                  db: AsyncSession = Depends(get_db)):
     events = await get_product_trace(db, product_id)
     return {"product_id": product_id, "events": [serialize_event(e) for e in events]}

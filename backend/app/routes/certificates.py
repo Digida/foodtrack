@@ -13,7 +13,7 @@ from app.services.certificate_service import (
     review_certificate_request, serialize_certificate_request,
     notify_expiring_certificates, auto_advance_cargo_on_cert_approval,
 )
-from app.utils.dependencies import get_current_user
+from app.utils.dependencies import get_current_user, get_current_user_or_guest
 
 router = APIRouter(prefix="/certificates", tags=["certificates"])
 
@@ -32,7 +32,7 @@ class CertificateCreateRequest(BaseModel):
 @router.post("")
 async def api_issue_certificate(
     req: CertificateCreateRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -50,17 +50,40 @@ async def api_issue_certificate(
 async def api_list_certificates(
     status: CertificateStatus | None = None,
     type: CertificateType | None = None,
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     certs = await list_certificates(db, status, type)
     return {"certificates": [serialize_certificate(c) for c in certs]}
 
 
+# Note: /requests and /by-item /verify-chain /missing routes must stay BEFORE
+# /{certificate_id}, otherwise the str path param swallows them.
+
+
+@router.get("/requests")
+async def api_list_requests(
+    status: CertificateRequestStatus | None = None,
+    applicant_id: int | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    requests = await list_certificate_requests(db, status, applicant_id)
+    return {"certificate_requests": [serialize_certificate_request(r) for r in requests]}
+
+
+@router.get("/requests/{request_id}")
+async def api_get_request(
+    request_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    cr = await get_certificate_request(db, request_id)
+    if not cr:
+        raise HTTPException(status_code=404, detail="Certificate request not found")
+    return {"certificate_request": serialize_certificate_request(cr)}
+
+
 @router.get("/{certificate_id}")
 async def api_get_certificate(
     certificate_id: str,
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     cert = await get_certificate(db, certificate_id)
@@ -72,7 +95,7 @@ async def api_get_certificate(
 @router.post("/{certificate_id}/verify-auth")
 async def api_verify_certificate(
     certificate_id: str,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -85,7 +108,7 @@ async def api_verify_certificate(
 @router.post("/{certificate_id}/revoke")
 async def api_revoke_certificate(
     certificate_id: str,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -98,7 +121,6 @@ async def api_revoke_certificate(
 @router.get("/by-item/{item_id}")
 async def api_certificates_by_item(
     item_id: int,
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     certs = await get_certificates_for_item(db, item_id)
@@ -108,7 +130,6 @@ async def api_certificates_by_item(
 @router.get("/verify-chain/{item_id}")
 async def api_verify_certificate_chain(
     item_id: int,
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -122,7 +143,6 @@ async def api_verify_certificate_chain(
 async def api_missing_certifications(
     item_id: int,
     target_market: str = "dubai_import",
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -148,7 +168,7 @@ class CertificateRequestReview(BaseModel):
 @router.post("/requests")
 async def api_request_certificate(
     req: CertificateRequestCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -160,29 +180,6 @@ async def api_request_certificate(
         return {"certificate_request": serialize_certificate_request(cr)}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-
-
-@router.get("/requests")
-async def api_list_requests(
-    status: CertificateRequestStatus | None = None,
-    applicant_id: int | None = None,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    requests = await list_certificate_requests(db, status, applicant_id)
-    return {"certificate_requests": [serialize_certificate_request(r) for r in requests]}
-
-
-@router.get("/requests/{request_id}")
-async def api_get_request(
-    request_id: int,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    cr = await get_certificate_request(db, request_id)
-    if not cr:
-        raise HTTPException(status_code=404, detail="Certificate request not found")
-    return {"certificate_request": serialize_certificate_request(cr)}
 
 
 @router.post("/requests/{request_id}/review")

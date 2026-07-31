@@ -8,7 +8,7 @@ from app.services.warehouse_service import (
     list_warehouses, get_warehouse, create_warehouse, update_warehouse,
     delete_warehouse, add_warehouse_item, update_warehouse_item, remove_warehouse_item,
 )
-from app.utils.dependencies import get_current_user
+from app.utils.dependencies import get_current_user_or_guest
 
 router = APIRouter(prefix="/warehouses", tags=["warehouses"])
 
@@ -61,7 +61,6 @@ class WarehouseItemUpdate(BaseModel):
 @router.get("")
 async def api_list_warehouses(
     page: int = Query(1, ge=1),
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await list_warehouses(db, page)
@@ -70,7 +69,6 @@ async def api_list_warehouses(
 @router.get("/{warehouse_id}")
 async def api_get_warehouse(
     warehouse_id: int,
-    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     w = await get_warehouse(db, warehouse_id)
@@ -82,7 +80,7 @@ async def api_get_warehouse(
 @router.post("")
 async def api_create_warehouse(
     req: WarehouseCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -99,7 +97,7 @@ async def api_create_warehouse(
 @router.put("/{warehouse_id}")
 async def api_update_warehouse(
     warehouse_id: int, req: WarehouseUpdate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -112,7 +110,7 @@ async def api_update_warehouse(
 @router.delete("/{warehouse_id}")
 async def api_delete_warehouse(
     warehouse_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -125,7 +123,7 @@ async def api_delete_warehouse(
 @router.post("/{warehouse_id}/items")
 async def api_add_warehouse_item(
     warehouse_id: int, req: WarehouseItemCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -141,7 +139,7 @@ async def api_add_warehouse_item(
 @router.put("/items/{item_id}")
 async def api_update_warehouse_item(
     item_id: int, req: WarehouseItemUpdate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -154,7 +152,7 @@ async def api_update_warehouse_item(
 @router.delete("/items/{item_id}")
 async def api_remove_warehouse_item(
     item_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -162,3 +160,4 @@ async def api_remove_warehouse_item(
         return {"deleted": True}
     except (ValueError, PermissionError) as e:
         raise HTTPException(status_code=404 if isinstance(e, ValueError) else 403, detail=str(e))
+
