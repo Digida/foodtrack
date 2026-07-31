@@ -71,7 +71,9 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--host",         default="0.0.0.0",   help="Bind host (default: 0.0.0.0)")
     p.add_argument("--port",         type=int, default=None, help="Port (default: 8000, or $PORT env var)")
     p.add_argument("--workers",      type=int, default=None, help="Gunicorn workers [prod only] (default: CPU*2+1)")
-    p.add_argument("--skip-migrate", action="store_true", help="Skip Alembic migration step")
+    p.add_argument("--run-migrate",  action="store_true",
+                   help="Run Alembic migrations synchronously BEFORE starting "
+                        "(default: migrations run in the background after startup)")
     p.add_argument("--log-level",    default=None, choices=["debug","info","warning","error"],
                    help="Log level (default: debug in dev, info in prod)")
     return p.parse_args()
@@ -202,7 +204,11 @@ def main():
     _check_env()
     _check_frontend()
 
-    if not args.skip_migrate:
+    # Migrations and seeding now run in the background inside the FastAPI
+    # lifespan — the server starts accepting requests immediately.
+    # Use --run-migrate to run migrations synchronously BEFORE starting
+    # (useful for CI, one-off provisioning, or the first-ever deployment).
+    if args.run_migrate:
         _migrate(python)
 
     if args.prod:

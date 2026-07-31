@@ -69,6 +69,17 @@ async def api_list_suppliers(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.services.startup_service import require_section_ready
+    from fastapi import HTTPException
+    err = require_section_ready("ADDITIONAL_GRAINS")  # proxy: any seed section
+    # Only block if seeding has not started at all (phase=pending) — don't
+    # block once seeding is running; partial data is still useful.
+    from app.services.startup_service import _state
+    if _state["phase"] == "pending":
+        raise HTTPException(status_code=503, detail={
+            "error": "data_not_ready",
+            "message": "Platform is still initialising. Please try again shortly.",
+        })
     return await list_suppliers(db, page, tenant_id=user.tenant_id)
 
 

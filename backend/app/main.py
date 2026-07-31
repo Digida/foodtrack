@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import logging.config
@@ -75,7 +76,7 @@ from app.routes import (
     search, batches, warehouses, shipments, collections, inventory, item_movements,
     codes, health, cargo, verify, compliance, rates, enrichment, continuous_enrichment,
     events, telemetry, developer_portal, gov_integration, arabic_i18n,
-    recalls, suppliers, insurance, monitoring, retention, tiers, esg,
+    recalls, suppliers, insurance, monitoring, retention, tiers, esg, startup,
 )
 
 # OpenTelemetry tracing — enabled only when opentelemetry packages are installed
@@ -101,15 +102,29 @@ except ImportError:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from pathlib import Path
+    from app.services.startup_service import run_startup_tasks
+
     logger.info({"msg": "FoodTrack starting up", "db": settings.DATABASE_URL.split("///")[0], "site": settings.SITE_URL})
+
     if _otel_available:
         FastAPIInstrumentor.instrument_app(app)
+
+    # Ensure tables exist for SQLite dev environments (production uses Alembic only)
     try:
         await init_db()
         logger.info({"msg": "Database initialised"})
     except Exception as exc:
         logger.error({"msg": "Database init failed", "error": str(exc), "trace": traceback.format_exc()})
         raise
+
+    # ── Launch background startup tasks (migrations + seeding) ──────────────
+    # The server starts accepting requests immediately. Migrations and seeding
+    # run behind it. Clients can poll GET /api/v1/startup/status for progress.
+    backend_dir = Path(__file__).resolve().parent.parent
+    asyncio.create_task(run_startup_tasks(backend_dir))
+    logger.info({"msg": "Background startup tasks launched — server is live"})
+
     # Log every registered route at startup for easy verification
     route_list = [
         {"path": r.path, "methods": list(getattr(r, "methods", []))}
@@ -244,5 +259,6 @@ app.include_router(retention.router, prefix="/api/v1")
 app.include_router(tiers.router, prefix="/api/v1")
 app.include_router(esg.router, prefix="/api/v1")
 app.include_router(monitoring.router)
+app.include_router(startup.router, prefix="/api/v1")
 
 app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")
