@@ -1,12 +1,12 @@
 @echo off
-title FoodTrack Server
-cd /d "%~dp0backend"
-echo Starting FoodTrack Server...
+title FoodTrack — Development Server
+cd /d "%~dp0"
 echo.
-..\.venv\Scripts\python.exe run.py
+echo  Starting FoodTrack (development mode)...
+echo.
+.venv\Scripts\python.exe main.py %*
 if %ERRORLEVEL% NEQ 0 (
     echo.
-    echo [ERROR] Server exited with code %ERRORLEVEL%
-    echo Check the output above for details.
+    echo  [ERROR] Server exited with code %ERRORLEVEL%
     pause
 )
