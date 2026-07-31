@@ -24,7 +24,7 @@ async def register_cargo(
     weight_kg: float | None = None, volume_m3: float | None = None,
     notes: str | None = None,
 ):
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Only ADMIN and ENTERPRISE users can register cargo")
 
     item = await db.get(TaxonomyItem, item_id)
@@ -129,7 +129,7 @@ async def list_cargo_for_item(db: AsyncSession, item_id: int, page: int = 1):
 
 
 async def update_cargo_status(db: AsyncSession, user: User, cargo_id: int, new_status: CargoStatus):
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Only ADMIN and ENTERPRISE users can update cargo status")
 
     cargo = await db.get(CargoRegistration, cargo_id)

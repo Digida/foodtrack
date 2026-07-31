@@ -37,19 +37,28 @@ DUBAI_MARKET_CERTS: dict[str, list[CertificateType]] = {
 CERT_EXPIRY_NOTIFY_DAYS = 30
 
 
-async def issue_certificate(db: AsyncSession, user: User, product_id: int, cert_type: CertificateType,
+async def issue_certificate(db: AsyncSession, user: User, product_id: int | None = None, cert_type: CertificateType = None,
                              issuing_body: str | None = None, recipient_entity: str | None = None,
                              description: str | None = None, expiry_date: str | None = None,
-                             document_url: str | None = None, metadata_json: str | None = None) -> Certificate:
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE, UserRole.VERIFIER):
+                             document_url: str | None = None, metadata_json: str | None = None,
+                             item_id: int | None = None) -> Certificate:
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE, UserRole.VERIFIER):
         raise PermissionError("Insufficient permissions")
-    prod_result = await db.execute(select(Product).where(Product.id == product_id))
-    product = prod_result.scalar_one_or_none()
-    if not product:
-        raise ValueError("Product not found")
+    if product_id is None and item_id is None:
+        raise ValueError("A product_id or item_id is required to issue a certificate")
+    product = None
+    if product_id is not None:
+        prod_result = await db.execute(select(Product).where(Product.id == product_id))
+        product = prod_result.scalar_one_or_none()
+        if not product:
+            raise ValueError("Product not found")
+    if item_id is not None:
+        item = await db.get(TaxonomyItem, item_id)
+        if not item:
+            raise ValueError("Item not found")
     cert_id = f"FT-{uuid.uuid4().hex[:8].upper()}"
     cert = Certificate(
-        certificate_id=cert_id, product_id=product_id, type=cert_type,
+        certificate_id=cert_id, product_id=product_id, item_id=item_id, type=cert_type,
         status=CertificateStatus.ISSUED, issuer_id=user.id, issuer_name=user.full_name,
         issuing_body=issuing_body or user.company, recipient_entity=recipient_entity,
         description=description, digital_signature=uuid.uuid4().hex,
@@ -95,7 +104,7 @@ async def verify_certificate(db: AsyncSession, user: User, certificate_id: str) 
 
 
 async def revoke_certificate(db: AsyncSession, user: User, certificate_id: str) -> Certificate:
-    if user.role != UserRole.ADMIN:
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
         raise PermissionError("Admin only")
     result = await db.execute(select(Certificate).where(Certificate.certificate_id == certificate_id))
     cert = result.scalar_one_or_none()
@@ -230,7 +239,7 @@ async def review_certificate_request(
     db: AsyncSession, user: User, request_id: int,
     decision: CertificateRequestStatus, reviewer_notes: str | None = None,
 ) -> CertificateRequest:
-    if user.role not in (UserRole.ADMIN, UserRole.VERIFIER):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.VERIFIER):
         raise PermissionError("Only ADMIN and VERIFIER can review requests")
 
     req = await db.get(CertificateRequest, request_id)
@@ -248,8 +257,8 @@ async def review_certificate_request(
 
     if decision == CertificateRequestStatus.APPROVED:
         cert = await issue_certificate(
-            db=db, user=user, product_id=1,
-            cert_type=req.requested_type,
+            db=db, user=user, cert_type=req.requested_type,
+            item_id=req.item_id,
             recipient_entity=getattr(user, 'company', None),
             description=f"Auto-issued from approved request #{request_id}",
         )

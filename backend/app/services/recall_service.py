@@ -19,7 +19,7 @@ async def initiate_recall(
     severity: RecallSeverity = RecallSeverity.MEDIUM,
     affected_region: str | None = None,
 ) -> Recall:
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Only ADMIN and ENTERPRISE can initiate recalls")
 
     batch = await db.get(Batch, batch_id)
@@ -44,7 +44,7 @@ async def initiate_recall(
     await db.commit()
 
     recipients = await db.execute(
-        select(User).where(User.role.in_([UserRole.ADMIN, UserRole.ENTERPRISE]))
+        select(User).where(User.role.in_([UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE]))
     )
     for recipient in recipients.scalars().all():
         try:
@@ -91,7 +91,7 @@ async def get_recall_detail(db: AsyncSession, recall_id: int) -> dict | None:
 
 
 async def update_recall_status(db: AsyncSession, user: User, recall_id: int, new_status: RecallStatus) -> Recall:
-    if user.role != UserRole.ADMIN:
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
         raise PermissionError("Admin access required to update recall status")
 
     recall = await db.get(Recall, recall_id)

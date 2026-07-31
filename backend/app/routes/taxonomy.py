@@ -9,7 +9,7 @@ from app.services.taxonomy_service import (
     list_taxonomies, get_taxonomy, get_taxonomy_tree,
     create_taxonomy, update_taxonomy, delete_taxonomy,
     create_node, update_node, delete_node,
-    create_item, update_item, list_items,
+    create_item, update_item, list_items, serialize_taxonomy,
 )
 from app.services.search_service import get_taxonomy_item_detail, get_taxonomy_item_by_code
 
@@ -138,7 +138,8 @@ class AttributeCreate(BaseModel):
 async def api_list_taxonomies(
     db: AsyncSession = Depends(get_db),
 ):
-    return await list_taxonomies(db)
+    taxonomies = await list_taxonomies(db)
+    return {"taxonomies": [serialize_taxonomy(t) for t in taxonomies]}
 
 
 @router.get("/{taxonomy_id}")

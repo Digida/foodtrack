@@ -19,7 +19,7 @@ async def create_supplier(
     regions: str | None = None,
     certifications: str | None = None,
 ) -> Supplier:
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
 
     supplier = Supplier(
@@ -109,7 +109,7 @@ async def create_scorecard(
     audit_result: str | None = None,
     notes: str | None = None,
 ) -> SupplierScorecard:
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
 
     supplier = await db.get(Supplier, supplier_id)

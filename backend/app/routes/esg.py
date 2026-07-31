@@ -26,7 +26,7 @@ async def api_create_carbon_footprint(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     item = await db.get(TaxonomyItem, item_id)

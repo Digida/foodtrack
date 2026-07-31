@@ -22,7 +22,7 @@ async def api_metrics(
     db: AsyncSession = Depends(get_db),
 ):
     """Internal metrics — requires admin or enterprise role."""
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     return await get_metrics(db)
 
@@ -33,6 +33,6 @@ async def api_sla(
     db: AsyncSession = Depends(get_db),
 ):
     """SLA dashboard — requires admin or enterprise role."""
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     return await get_sla(db)

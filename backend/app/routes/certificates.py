@@ -19,7 +19,8 @@ router = APIRouter(prefix="/certificates", tags=["certificates"])
 
 
 class CertificateCreateRequest(BaseModel):
-    product_id: int
+    product_id: int | None = None
+    item_id: int | None = None
     type: CertificateType
     issuing_body: str | None = None
     recipient_entity: str | None = None
@@ -40,6 +41,7 @@ async def api_issue_certificate(
             db, user, req.product_id, req.type, req.issuing_body,
             req.recipient_entity, req.description, req.expiry_date,
             req.document_url, req.metadata_json,
+            item_id=req.item_id,
         )
         return {"certificate": serialize_certificate(cert)}
     except (ValueError, PermissionError) as e:

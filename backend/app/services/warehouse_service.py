@@ -69,7 +69,7 @@ async def create_warehouse(db: AsyncSession, user: User, code: str, name: str,
                            contact_phone: str | None = None, capacity_items: int | None = None,
                            temperature_celsius: float | None = None,
                            humidity_percent: float | None = None):
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
     existing = await db.execute(select(Warehouse).where(Warehouse.code == code))
     if existing.scalar_one_or_none():
@@ -87,7 +87,7 @@ async def create_warehouse(db: AsyncSession, user: User, code: str, name: str,
 
 
 async def update_warehouse(db: AsyncSession, user: User, warehouse_id: int, data: dict):
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
     w = await db.get(Warehouse, warehouse_id)
     if not w:
@@ -101,7 +101,7 @@ async def update_warehouse(db: AsyncSession, user: User, warehouse_id: int, data
 
 
 async def delete_warehouse(db: AsyncSession, user: User, warehouse_id: int):
-    if user.role != UserRole.ADMIN:
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
         raise PermissionError("Admin only")
     w = await db.get(Warehouse, warehouse_id)
     if not w:
@@ -113,7 +113,7 @@ async def delete_warehouse(db: AsyncSession, user: User, warehouse_id: int):
 async def add_warehouse_item(db: AsyncSession, user: User, warehouse_id: int,
                               batch_id: int, quantity: int, zone: str | None = None,
                               rack: str | None = None, bin: str | None = None):
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
     wh = await db.get(Warehouse, warehouse_id)
     if not wh or not wh.is_active:
@@ -143,7 +143,7 @@ async def add_warehouse_item(db: AsyncSession, user: User, warehouse_id: int,
 
 
 async def update_warehouse_item(db: AsyncSession, user: User, item_id: int, data: dict):
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
     item = await db.get(WarehouseItem, item_id)
     if not item:
@@ -157,7 +157,7 @@ async def update_warehouse_item(db: AsyncSession, user: User, item_id: int, data
 
 
 async def remove_warehouse_item(db: AsyncSession, user: User, item_id: int):
-    if user.role != UserRole.ADMIN:
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
         raise PermissionError("Admin only")
     item = await db.get(WarehouseItem, item_id)
     if not item:

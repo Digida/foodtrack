@@ -23,7 +23,7 @@ ALLOWED_ARCHIVE_TABLES = frozenset({
 async def create_archive_policy(
     db: AsyncSession, user: User, entity_type: str, retention_days: int
 ) -> ArchivePolicy:
-    if user.role != UserRole.ADMIN:
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
         raise PermissionError("Admin access required")
 
     if entity_type not in ALLOWED_ARCHIVE_TABLES:
@@ -53,7 +53,7 @@ async def list_archive_policies(db: AsyncSession) -> list[dict]:
 
 
 async def run_archival(db: AsyncSession, user: User) -> dict:
-    if user.role != UserRole.ADMIN:
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
         raise PermissionError("Admin access required")
 
     policies_result = await db.execute(

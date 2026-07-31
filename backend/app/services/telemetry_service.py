@@ -148,7 +148,7 @@ async def list_alerts(db: AsyncSession, acknowledged: bool | None = None, page: 
 
 
 async def acknowledge_alert(db: AsyncSession, user: User, alert_id: int) -> TelemetryAlert:
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
 
     alert = await db.get(TelemetryAlert, alert_id)

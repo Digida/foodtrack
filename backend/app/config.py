@@ -22,6 +22,17 @@ class Settings:
     SMS_API_URL: str = os.getenv("SMS_API_URL", "")
     SMS_API_KEY: str = os.getenv("SMS_API_KEY", "")
 
+    # SSO client identifiers (used by the frontend OAuth flows)
+    GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    MICROSOFT_CLIENT_ID: str = os.getenv("MICROSOFT_CLIENT_ID", "")
+    MICROSOFT_CLIENT_SECRET: str = os.getenv("MICROSOFT_CLIENT_SECRET", "")
+    SSO_REDIRECT_URI: str = os.getenv("SSO_REDIRECT_URI", "")
+
+    # When true (and no email/SMS service is configured) OTP codes are
+    # returned in the API response so demo/testing flows can complete.
+    RETURN_OTP_IN_DEV: bool = os.getenv("RETURN_OTP_IN_DEV", "true").lower() in ("1", "true", "yes")
+
     def validate_production(self) -> None:
         """Raise at startup if critical secrets are still at insecure defaults."""
         is_sqlite = self.DATABASE_URL.startswith("sqlite")

@@ -16,7 +16,7 @@ async def create_product(db: AsyncSession, user: User, sku: str, name: str, cate
                          weight_kg: float | None = None, harvest_date: str | None = None,
                          expiry_date: str | None = None, storage_requirements: str | None = None,
                          metadata_json: str | None = None) -> dict:
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
     existing = await db.execute(select(Product).where(Product.sku == sku))
     if existing.scalar_one_or_none():
@@ -67,7 +67,7 @@ async def get_product_by_sku(db: AsyncSession, sku: str) -> Product | None:
 
 
 async def update_product(db: AsyncSession, user: User, product_id: int, updates: dict) -> Product:
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
     result = await db.execute(select(Product).where(Product.id == product_id))
     product = result.scalar_one_or_none()
@@ -83,7 +83,7 @@ async def update_product(db: AsyncSession, user: User, product_id: int, updates:
 
 
 async def delete_product(db: AsyncSession, user: User, product_id: int) -> None:
-    if user.role != UserRole.ADMIN:
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
         raise PermissionError("Admin only")
     result = await db.execute(select(Product).where(Product.id == product_id))
     product = result.scalar_one_or_none()

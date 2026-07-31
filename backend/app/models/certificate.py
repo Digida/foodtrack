@@ -53,7 +53,7 @@ class Certificate(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     certificate_id = Column(String(100), unique=True, index=True, nullable=False)
-    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
     item_id = Column(Integer, ForeignKey("taxonomy_items.id"), nullable=True, index=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     type = Column(SAEnum(CertificateType), nullable=False)

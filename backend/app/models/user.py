@@ -8,6 +8,7 @@ from app.database import Base
 
 
 class UserRole(str, enum.Enum):
+    SUPERUSER = "superuser"
     ADMIN = "admin"
     ENTERPRISE = "enterprise"
     VERIFIER = "verifier"
@@ -25,6 +26,9 @@ class User(Base):
     role = Column(SAEnum(UserRole), default=UserRole.VIEWER, nullable=False)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     hashed_password = Column(String(255), nullable=False)
+    # Secondary contact details (used for e.g. alternate email / alternate phone)
+    alternate_email = Column(String(255), nullable=True)
+    alternate_phone = Column(String(50), nullable=True)
     email_verified = Column(Boolean, default=False)
     phone_verified = Column(Boolean, default=False)
     totp_secret = Column(String(64), nullable=True)

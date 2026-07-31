@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from app.models.tracking import Collection, CollectionItem, FeedSource
-from app.models.taxonomy import TaxonomyItem
+from app.models.taxonomy import Taxonomy, TaxonomyNode, TaxonomyItem
 from app.models.user import User, UserRole
 
 
@@ -70,7 +70,7 @@ async def get_collection(db: AsyncSession, collection_id: int):
 async def create_collection(db: AsyncSession, user: User, name: str,
                             description: str | None = None, image_url: str | None = None,
                             is_ai_generated: bool = False, feed_source_id: int | None = None):
-    if user is not None and user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user is not None and user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
     slug = slugify(name)
     existing = await db.execute(select(Collection).where(Collection.slug == slug))
@@ -87,7 +87,7 @@ async def create_collection(db: AsyncSession, user: User, name: str,
 
 
 async def update_collection(db: AsyncSession, user: User, collection_id: int, data: dict):
-    if user is not None and user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user is not None and user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
     c = await db.get(Collection, collection_id)
     if not c:
@@ -103,7 +103,7 @@ async def update_collection(db: AsyncSession, user: User, collection_id: int, da
 
 
 async def delete_collection(db: AsyncSession, user: User, collection_id: int):
-    if user is not None and user.role != UserRole.ADMIN:
+    if user is not None and user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
         raise PermissionError("Admin only")
     c = await db.get(Collection, collection_id)
     if not c:
@@ -114,7 +114,7 @@ async def delete_collection(db: AsyncSession, user: User, collection_id: int):
 
 async def add_item_to_collection(db: AsyncSession, user: User, collection_id: int,
                                   item_id: int, sort_order: int = 0, notes: str | None = None):
-    if user is not None and user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user is not None and user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
     c = await db.get(Collection, collection_id)
     if not c or not c.is_active:
@@ -138,7 +138,7 @@ async def add_item_to_collection(db: AsyncSession, user: User, collection_id: in
 
 
 async def remove_item_from_collection(db: AsyncSession, user: User, collection_item_id: int):
-    if user is not None and user.role != UserRole.ADMIN:
+    if user is not None and user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
         raise PermissionError("Admin only")
     ci = await db.get(CollectionItem, collection_item_id)
     if not ci:
@@ -201,6 +201,211 @@ async def run_ai_feed(db: AsyncSession, feed_source_id: int):
         raise ValueError(f"Failed to parse feed XML: {e}")
 
 
+# Each category aims for this many collections.  Categories with fewer
+# items than this are considered exhausted and get as many collections as
+# their item count supports (never fewer than one).
+TARGET_COLLECTIONS = 10
+# A themed / assortment collection must contain at least this many items.
+MIN_COLLECTION_ITEMS = 3
+
+
+# Facet themes — each produces one overlapping, thematically coherent subset
+# per category based on the item's taxonomy (phylum) and its local_uses text.
+_FACET_THEMES = [
+    ("Plant-Derived", re.compile(r"(?i)plant|leaf|flower|seed|fruit|root|tuber|vegetable|grain|cereal|alga|seaweed"), None),
+    ("Animal-Derived", None, {"Chordata", "Mollusca", "Arthropoda"}),
+    ("Fungi & Fermented Cultures", None, {"Basidiomycota", "Ascomycota"}),
+    ("Beverage & Drink", re.compile(r"(?i)juice|drink|beverage|tea|wine|beer|spirit|sake|cider|rum|vodka|whisky|gin|tequila|brandy|champagne|kombucha|kvass"), None),
+    ("Dairy & Milk", re.compile(r"(?i)milk|dairy|cheese|butter|yogurt|cream|ghee|whey|kefir"), None),
+    ("Meat & Poultry", re.compile(r"(?i)meat|beef|pork|lamb|poultry|chicken|steak|duck|turkey|goose|rabbit|venison|goat|mince"), None),
+    ("Seafood & Marine", re.compile(r"(?i)fish|shrimp|tuna|salmon|oyster|mussel|clam|scallop|lobster|squid|octopus|crab|crayfish|anchovy|sardine|seaweed|nori|kelp|seafood|abalone|eel"), None),
+    ("Baking & Bakery", re.compile(r"(?i)bread|bak|pastry|flour|dough|bagel|cracker|biscuit|loaf|tortilla|naan|pita|muffin|croissant|ciabatta|brioche|focaccia|baguette|sourdough|crumpet|semolina"), None),
+    ("Snack & Confection", re.compile(r"(?i)snack|candy|confection|chip|bar|sweet|popcorn|pretzel|fudge|toffee|caramel|nougat|halva|gummy|licorice|marshmallow|chocolate"), None),
+    ("Sauce, Condiment & Seasoning", re.compile(r"(?i)sauce|condiment|season|spice|paste|dressing|ketchup|mustard|mayonnaise|pesto|harissa|salsa|tahini|vinegar|soy sauce|fish sauce|oyster sauce|worcestershire"), None),
+    ("Sweeteners & Syrups", re.compile(r"(?i)sweetener|syrup|sugar|jaggery|molasses|honey|stevia|agave|fructose"), None),
+    ("Fermented & Cultured", re.compile(r"(?i)fermented|cultured|sauerkraut|kimchi|miso|tempeh|koji|gochujang|doubanjiang|sourdough|pickle|natto|kombucha|probiotic"), None),
+    ("Whole Grain & Staple", re.compile(r"(?i)staple|grain|cereal|porridge|rice|wheat|maize|millet|sorghum|tuber|root|yam|cassava|potato|starch|pulse|bean|lentil"), None),
+    ("Plant Milks & Alternatives", re.compile(r"(?i)oat milk|soy milk|almond milk|coconut milk|cashew milk|plant milk|plant-based|vegan|alternative"), None),
+]
+
+
+def _theme_match(item, pattern, phyla) -> bool:
+    if phyla and item.phylum in phyla:
+        return True
+    if pattern and item.local_uses and pattern.search(item.local_uses):
+        return True
+    return False
+
+
+def _assortment_subsets(item_ids, slots: int) -> list[list[int]]:
+    """Produce up to `slots` selection subsets that fill the remaining slots."""
+    if slots <= 0:
+        return []
+    items = sorted(item_ids)
+    n = len(items)
+    if n == 0:
+        return []
+    if n >= MIN_COLLECTION_ITEMS * slots:
+        return [items[i * MIN_COLLECTION_ITEMS:(i + 1) * MIN_COLLECTION_ITEMS] for i in range(slots)]
+    subset_size = min(MIN_COLLECTION_ITEMS, n)
+    return [
+        [items[(start + j) % n] for j in range(subset_size)]
+        for start in range(slots)
+    ]
+
+
+async def seed_collections_from_taxonomy(
+    db: AsyncSession,
+    taxonomy_id: int | None = None,
+) -> dict:
+    """
+    Idempotent, incremental collection seed.
+
+    For every top-level taxonomy node (category) it generates up to
+    ``TARGET_COLLECTIONS`` collections: a complete base collection, a set of
+    overlapping facet collections derived from the item's taxonomy and usage
+    keywords, and — when needed to reach the target — curated "selection"
+    collections.  Categories with fewer items than ``TARGET_COLLECTIONS`` are
+    considered exhausted and receive as many collections as their item count
+    supports.
+
+    Safe to re-run: existing collections are reused (by slug) and only
+    missing items are linked.
+    """
+    if taxonomy_id is not None:
+        tax = await db.get(Taxonomy, taxonomy_id)
+    else:
+        tax = (await db.execute(
+            select(Taxonomy).where(Taxonomy.is_active == True)
+            .order_by(Taxonomy.name).limit(1)
+        )).scalar_one_or_none()
+    if not tax:
+        return {"nodes": 0, "collections": 0, "items": 0}
+
+    nodes = (await db.execute(
+        select(TaxonomyNode).where(
+            TaxonomyNode.taxonomy_id == tax.id,
+            TaxonomyNode.parent_id.is_(None),
+            TaxonomyNode.is_active == True,
+        ).order_by(TaxonomyNode.sort_order, TaxonomyNode.name)
+    )).scalars().all()
+
+    existing = (await db.execute(
+        select(Collection.id, Collection.slug, Collection.name, Collection.is_active)
+    )).all()
+    by_slug = {slug: (cid, name, active) for cid, slug, name, active in existing}
+
+    membership: dict[int, set[int]] = {}
+    existing_items = (await db.execute(
+        select(CollectionItem.collection_id, CollectionItem.item_id)
+    )).all()
+    for cid, item_id in existing_items:
+        membership.setdefault(cid, set()).add(item_id)
+
+    collections_created = 0
+    items_linked = 0
+
+    for node in nodes:
+        items = await _subtree_items(db, node.id)
+        item_ids = [item.id for item in items]
+        n = len(item_ids)
+        if n == 0:
+            continue
+
+        target = min(TARGET_COLLECTIONS, max(1, n))
+
+        # 1) Complete base collection
+        planned: list[tuple[str, str, list[int]]] = [
+            (node.name, f"All {node.name} items catalogued in {tax.name}.", item_ids),
+        ]
+
+        # 2) Facet collections (overlapping, thematically coherent subsets)
+        for theme_name, pattern, phyla in _FACET_THEMES:
+            if len(planned) >= target:
+                break
+            subset = [item.id for item in items if _theme_match(item, pattern, phyla)]
+            if len(subset) >= MIN_COLLECTION_ITEMS:
+                planned.append((
+                    f"{node.name} — {theme_name}",
+                    f"{theme_name} items in {node.name} ({tax.name}).",
+                    subset,
+                ))
+
+        # 3) Curated selection collections to reach the target
+        slots = target - len(planned)
+        for idx, subset in enumerate(_assortment_subsets(item_ids, slots), start=1):
+            planned.append((
+                f"{node.name} — Selection {idx}",
+                f"Curated selection of {node.name} items from {tax.name}.",
+                subset,
+            ))
+
+        for name, description, subset_ids in planned:
+            slug = slugify(name)
+            cid, cname, active = by_slug.get(slug, (None, None, True))
+            if cid is not None and (cname != name or not active):
+                slug = f"{slug}-{uuid.uuid4().hex[:6]}"
+                cid, cname, active = by_slug.get(slug, (None, None, True))
+
+            if cid is None:
+                c = Collection(
+                    name=name,
+                    slug=slug,
+                    description=description,
+                    is_active=True,
+                    sort_order=node.sort_order,
+                )
+                db.add(c)
+                await db.flush()
+                cid = c.id
+                by_slug[slug] = (cid, name, True)
+                membership.setdefault(cid, set())
+                collections_created += 1
+            else:
+                membership.setdefault(cid, set())
+
+            new_items = sorted(set(subset_ids) - membership[cid])
+            for item_id in new_items:
+                db.add(CollectionItem(collection_id=cid, item_id=item_id, sort_order=0))
+                items_linked += 1
+            membership[cid].update(new_items)
+
+    await db.commit()
+    return {"nodes": len(nodes), "collections": collections_created, "items": items_linked}
+
+
+async def _descendant_node_ids(db: AsyncSession, root_id: int) -> set[int]:
+    """Return all active descendant node ids of a node (excludes the root)."""
+    ids: set[int] = set()
+    stack = [root_id]
+    while stack:
+        parent = stack.pop()
+        rows = await db.execute(
+            select(TaxonomyNode.id).where(
+                TaxonomyNode.parent_id == parent,
+                TaxonomyNode.is_active == True,
+            )
+        )
+        for (child_id,) in rows.all():
+            if child_id not in ids:
+                ids.add(child_id)
+                stack.append(child_id)
+    return ids
+
+
+async def _subtree_items(db: AsyncSession, root_id: int) -> list:
+    """Return active item rows across a node and all its descendants."""
+    node_ids = await _descendant_node_ids(db, root_id)
+    node_ids.add(root_id)
+    rows = await db.execute(
+        select(TaxonomyItem).where(
+            TaxonomyItem.node_id.in_(node_ids),
+            TaxonomyItem.is_active == True,
+        )
+    )
+    return list(rows.scalars().all())
+
+
 async def list_feed_sources(db: AsyncSession):
     result = await db.execute(select(FeedSource).order_by(FeedSource.name))
     feeds = []
@@ -223,7 +428,7 @@ async def create_feed_source(db: AsyncSession, user: User, name: str, url: str,
                               taxonomy_target_id: int | None = None,
                               node_target_id: int | None = None,
                               schedule_minutes: int = 1440):
-    if user is not None and user.role != UserRole.ADMIN:
+    if user is not None and user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
         raise PermissionError("Admin only")
     fs = FeedSource(
         name=name, url=url, feed_type=feed_type,
@@ -238,7 +443,7 @@ async def create_feed_source(db: AsyncSession, user: User, name: str, url: str,
 
 
 async def delete_feed_source(db: AsyncSession, user: User, feed_id: int):
-    if user is not None and user.role != UserRole.ADMIN:
+    if user is not None and user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
         raise PermissionError("Admin only")
     fs = await db.get(FeedSource, feed_id)
     if not fs:

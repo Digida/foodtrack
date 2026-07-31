@@ -40,7 +40,7 @@ async def api_update_tenant_tier(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if user.role != UserRole.ADMIN:
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
         raise HTTPException(status_code=403, detail="Admin access required")
     if tier not in TIER_FEATURES:
         raise HTTPException(status_code=400, detail=f"Invalid tier: {tier}")
@@ -62,7 +62,7 @@ def require_tier(minimum_tier: str):
     min_idx = tier_order.index(minimum_tier)
 
     async def _check(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> bool:
-        if user.role == UserRole.ADMIN:
+        if user.role in (UserRole.SUPERUSER, UserRole.ADMIN):
             return True
         if not user.tenant_id:
             raise HTTPException(status_code=403, detail="No tenant assigned")

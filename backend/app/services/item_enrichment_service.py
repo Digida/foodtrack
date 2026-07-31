@@ -17,7 +17,7 @@ from tools.report_audit import ReportAudit
 
 
 async def enrich_from_web(db: AsyncSession, user: User, item_id: int) -> dict:
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Only ADMIN and ENTERPRISE users can enrich items")
 
     item = await db.get(TaxonomyItem, item_id)
@@ -109,7 +109,7 @@ async def suggest_item_classification(db: AsyncSession, name: str) -> dict:
 
 
 async def detect_anomalies(db: AsyncSession, user: User, item_id: int) -> dict:
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE, UserRole.VERIFIER):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE, UserRole.VERIFIER):
         raise PermissionError("Insufficient permissions to detect anomalies")
 
     item = await db.get(TaxonomyItem, item_id)

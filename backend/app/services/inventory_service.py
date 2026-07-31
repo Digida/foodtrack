@@ -148,7 +148,7 @@ async def record_movement(db: AsyncSession, user: User | None, item_id: int,
                           warehouse_id: int | None = None, batch_id: int | None = None,
                           reference_type: MovementReference | None = None,
                           reference_id: int | None = None, notes: str | None = None):
-    if user and user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user and user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
 
     movement = InventoryMovement(
@@ -238,7 +238,7 @@ async def reconcile_from_warehouse_items(db: AsyncSession, item_id: int, warehou
 async def transfer_between_warehouses(db: AsyncSession, user: User,
                                        item_id: int, from_warehouse_id: int,
                                        to_warehouse_id: int, quantity: int):
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
 
     from_inv = await db.execute(

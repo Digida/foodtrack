@@ -12,10 +12,13 @@ from app.services.auth_service import (
     enable_totp, confirm_totp,
     generate_email_otp, generate_phone_otp,
     send_email_otp, send_sms_otp,
-    sso_login_or_register,
+    sso_login_or_register, list_sso_providers,
     generate_biometric_challenge,
     update_profile, change_password,
     list_users, get_user_by_id, update_user_role, toggle_user_active,
+    serialize_user,
+    request_email_verification, verify_email_address,
+    request_phone_verification, verify_phone_number,
 )
 from app.utils.dependencies import get_current_user, require_admin
 
@@ -54,6 +57,12 @@ class UpdateProfileRequest(BaseModel):
     full_name: str | None = None
     company: str | None = None
     phone: str | None = None
+    alternate_email: str | None = None
+    alternate_phone: str | None = None
+
+
+class VerifyCodeRequest(BaseModel):
+    code: str
 
 
 class ChangePasswordRequest(BaseModel):
@@ -72,8 +81,7 @@ class UpdateRoleRequest(BaseModel):
 async def api_register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     try:
         user, token = await register_user(db, req.email, req.password, req.full_name, req.company, req.phone, req.tenant_id)
-        return {"access_token": token, "token_type": "bearer",
-                "user": {"id": user.id, "email": user.email, "name": user.full_name, "role": user.role.value, "tenant_id": user.tenant_id}}
+        return {"access_token": token, "token_type": "bearer", "user": serialize_user(user)}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -84,8 +92,7 @@ async def api_login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
         user, token, mfa_info = await authenticate_user(db, req.email, req.password)
         if mfa_info:
             return mfa_info
-        return {"access_token": token, "token_type": "bearer",
-                "user": {"id": user.id, "email": user.email, "name": user.full_name, "role": user.role.value}}
+        return {"access_token": token, "token_type": "bearer", "user": serialize_user(user)}
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
 
@@ -94,8 +101,7 @@ async def api_login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
 async def api_mfa_verify(req: MFATokenRequest, db: AsyncSession = Depends(get_db)):
     try:
         user, token = await verify_mfa_token(db, req.temp_token, req.code)
-        return {"access_token": token, "token_type": "bearer",
-                "user": {"id": user.id, "email": user.email, "name": user.full_name, "role": user.role.value}}
+        return {"access_token": token, "token_type": "bearer", "user": serialize_user(user)}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -120,8 +126,50 @@ async def verify_totp_setup(req: TOTPVerifyRequest, user: User = Depends(get_cur
 async def api_sso_login(req: SSOLoginRequest, db: AsyncSession = Depends(get_db)):
     try:
         user, token = await sso_login_or_register(db, req.provider, req.token)
-        return {"access_token": token, "token_type": "bearer",
-                "user": {"id": user.id, "email": user.email, "name": user.full_name, "role": user.role.value}}
+        return {"access_token": token, "token_type": "bearer", "user": serialize_user(user)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/sso-providers")
+async def api_sso_providers():
+    return {"providers": list_sso_providers()}
+
+
+# ─── Email / phone verification ───────────────────────────────
+
+@router.post("/email-otp")
+async def api_email_otp(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    try:
+        return await request_email_verification(db, user)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/verify-email")
+async def api_verify_email(req: VerifyCodeRequest, user: User = Depends(get_current_user),
+                           db: AsyncSession = Depends(get_db)):
+    try:
+        await verify_email_address(db, user, req.code)
+        return {"status": "email_verified", "email_verified": True}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/phone-otp")
+async def api_phone_otp(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    try:
+        return await request_phone_verification(db, user)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/verify-phone")
+async def api_verify_phone(req: VerifyCodeRequest, user: User = Depends(get_current_user),
+                           db: AsyncSession = Depends(get_db)):
+    try:
+        await verify_phone_number(db, user, req.code)
+        return {"status": "phone_verified", "phone_verified": True}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -135,10 +183,7 @@ async def biometric_challenge(user: User = Depends(get_current_user)):
 
 @router.get("/me", response_model=UserDetailResponse)
 async def get_me(user: User = Depends(get_current_user)):
-    return {"id": user.id, "email": user.email, "full_name": user.full_name,
-            "company": user.company, "role": user.role.value, "phone": user.phone,
-            "is_active": user.is_active, "email_verified": user.email_verified,
-            "totp_enabled": user.totp_enabled}
+    return serialize_user(user)
 
 
 @router.put("/me", response_model=UserDetailResponse)
@@ -146,10 +191,7 @@ async def update_me(req: UpdateProfileRequest, user: User = Depends(get_current_
                     db: AsyncSession = Depends(get_db)):
     try:
         updated = await update_profile(db, user, req.model_dump(exclude_unset=True))
-        return {"id": updated.id, "email": updated.email, "full_name": updated.full_name,
-                "company": updated.company, "role": updated.role.value, "phone": updated.phone,
-                "is_active": updated.is_active, "email_verified": updated.email_verified,
-                "totp_enabled": updated.totp_enabled}
+        return serialize_user(updated)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -184,11 +226,7 @@ async def api_get_user(
     u = await get_user_by_id(db, user_id)
     if not u:
         raise HTTPException(status_code=404, detail="User not found")
-    return {"id": u.id, "email": u.email, "full_name": u.full_name,
-            "company": u.company, "phone": u.phone,
-            "role": u.role.value if hasattr(u.role, 'value') else str(u.role),
-            "is_active": u.is_active, "email_verified": u.email_verified,
-            "totp_enabled": u.totp_enabled}
+    return serialize_user(u)
 
 
 @router.put("/users/role")

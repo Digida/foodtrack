@@ -350,7 +350,42 @@ Pages.login = (app) => {
         <div class="form-group"><label>Email</label><input id="l-email" class="fi" type="email" placeholder="ahmed@company.ae"></div>
         <div class="form-group"><label>Password</label><input id="l-pass" class="fi" type="password" placeholder="Enter password"></div>
         <button class="btn btn-primary btn-block" id="l-btn">Login</button>
-        <div class="auth-switch">Don\'t have an account? <a href="#" id="switch-reg">Register</a></div>`;
+        <div class="auth-switch">Don\'t have an account? <a href="#" id="switch-reg">Register</a></div>
+        <div class="sso-divider"><span>or continue with</span></div>
+        <div class="sso-buttons" id="sso-buttons"></div>`;
+      Auth.getSsoProviders().then(providers => {
+        const box = document.getElementById('sso-buttons');
+        if (!box) return;
+        const enabled = providers.filter(p => p.enabled && p.client_id);
+        if (enabled.length === 0) {
+          box.innerHTML = '<p class="sso-note">SSO is not configured yet — enter the account details provided by FoodTrack.</p>';
+          return;
+        }
+        box.innerHTML = enabled.map(p => `
+          <button class="btn btn-outline btn-block sso-btn" data-provider="${p.provider}">
+            ${p.provider === 'google' ? 'G' : 'M'} · ${p.provider.charAt(0).toUpperCase() + p.provider.slice(1)}
+          </button>`).join('');
+        box.querySelectorAll('.sso-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const p = btn.dataset.provider;
+            const provider = enabled.find(x => x.provider === p);
+            const redirectUri = provider.redirect_uri || window.location.origin + '/login.html';
+            let url = '';
+            if (p === 'google') {
+              url = 'https://accounts.google.com/o/oauth2/v2/auth?client_id=' +
+                encodeURIComponent(provider.client_id) +
+                '&redirect_uri=' + encodeURIComponent(redirectUri) +
+                '&response_type=token&scope=openid%20email%20profile';
+            } else if (p === 'microsoft') {
+              url = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=' +
+                encodeURIComponent(provider.client_id) +
+                '&redirect_uri=' + encodeURIComponent(redirectUri) +
+                '&response_type=token&scope=openid%20email%20profile';
+            }
+            if (url) window.location.href = url;
+          });
+        });
+      });
       document.getElementById('l-btn').onclick = async () => {
         if (!UI.validateForm({
           'l-email': { required: true, type: 'email' },
@@ -1210,19 +1245,50 @@ Pages.settings = (app) => {
   }
   app.appendChild(UI.layout('Settings', async () => {
     const me = await API.get('/auth/me');
-    const isAdmin = me.role === 'admin';
+    const isAdmin = me.role === 'admin' || me.role === 'superuser';
     let usersData = null;
     if (isAdmin) {
       try { usersData = await API.get('/auth/users'); } catch(e) { /* silent fail */ }
     }
     const body = document.createElement('div');
+    const roleBadge = me.role === 'superuser' ? 'badge-danger' : me.role === 'admin' ? 'badge-danger' : me.role === 'enterprise' ? 'badge-warning' : 'badge-info';
+    const verified = (v) => v ? '<span class="badge badge-success">Verified ✓</span>' : '<span class="badge badge-secondary">Unverified</span>';
     body.innerHTML = `
       <div class="card"><div class="card-header"><h3>👤 Account</h3>
         <button class="btn btn-sm btn-outline" id="edit-profile-btn">Edit Profile</button></div>
         <table style="width:100%;font-size:14px">${[
-          ['Name', me.name], ['Email', me.email], ['Company', me.company||'—'], ['Phone', me.phone||'—'],
-          ['Role', `<span class="badge ${me.role === 'admin' ? 'badge-danger' : me.role === 'enterprise' ? 'badge-warning' : 'badge-info'}">${me.role.toUpperCase()}</span>`],
-        ].map(([k,v]) => `<tr><td style="padding:6px 0;color:#6b7280;width:120px">${k}</td><td style="padding:6px 0"><strong>${v}</strong></td></tr>`).join('')}</table></div>
+          ['Name', me.full_name], ['Email', me.email], ['Company', me.company||'—'], ['Phone', me.phone||'—'],
+          ['Alternate Email', me.alternate_email||'—'], ['Alternate Phone', me.alternate_phone||'—'],
+          ['Email Verified', verified(me.email_verified)], ['Phone Verified', verified(me.phone_verified)],
+          ['Role', `<span class="badge ${roleBadge}">${me.role.toUpperCase()}</span>`],
+        ].map(([k,v]) => `<tr><td style="padding:6px 0;color:#6b7280;width:150px">${k}</td><td style="padding:6px 0"><strong>${v}</strong></td></tr>`).join('')}</table></div>
+      <div class="card" style="margin-top:20px"><div class="card-header"><h3>✅ Verification</h3></div>
+        <div class="verification-grid">
+          <div class="verify-box">
+            <strong>Email</strong>
+            <div>${me.email} ${verified(me.email_verified)}</div>
+            <button class="btn btn-outline btn-sm" id="send-email-otp" ${me.email_verified ? 'disabled' : ''}>${me.email_verified ? 'Verified' : 'Send Code'}</button>
+            <div id="email-verify-box" style="display:none;margin-top:8px">
+              <div style="display:flex;gap:8px;max-width:280px">
+                <input id="email-otp-code" class="fi" placeholder="Enter code" maxlength="8" style="flex:1">
+                <button class="btn btn-primary btn-sm" id="confirm-email-otp">Verify</button>
+              </div>
+              <p id="email-otp-hint" class="verify-hint"></p>
+            </div>
+          </div>
+          <div class="verify-box">
+            <strong>Phone</strong>
+            <div>${me.phone||'No phone on file'} ${verified(me.phone_verified)}</div>
+            <button class="btn btn-outline btn-sm" id="send-phone-otp" ${me.phone_verified || !me.phone ? 'disabled' : ''}>${me.phone_verified ? 'Verified' : 'Send Code'}</button>
+            <div id="phone-verify-box" style="display:none;margin-top:8px">
+              <div style="display:flex;gap:8px;max-width:280px">
+                <input id="phone-otp-code" class="fi" placeholder="Enter code" maxlength="8" style="flex:1">
+                <button class="btn btn-primary btn-sm" id="confirm-phone-otp">Verify</button>
+              </div>
+              <p id="phone-otp-hint" class="verify-hint"></p>
+            </div>
+          </div>
+        </div></div>
       <div class="card" style="margin-top:20px"><div class="card-header"><h3>🔐 Security</h3></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-outline" onclick="Pages.setupTOTP()">Setup TOTP (Authenticator)</button>
@@ -1236,9 +1302,9 @@ Pages.settings = (app) => {
       ${isAdmin ? `
       <div class="card" style="margin-top:20px;border-color:var(--danger)">
         <div class="card-header"><h3>🛡️ Admin — User Management</h3>
-          <span class="badge badge-danger">ADMIN</span>
+          <span class="badge badge-danger">${me.role.toUpperCase()}</span>
         </div>
-        <div id="admin-users-list">${renderAdminUsers(usersData)}</div>
+        <div id="admin-users-list">${renderAdminUsers(usersData, me.role)}</div>
       </div>` : ''}`;
     body.querySelector('#edit-profile-btn').onclick = () => Pages.showEditProfile(me);
     body.querySelector('#dark-toggle').onclick = () => {
@@ -1247,6 +1313,36 @@ Pages.settings = (app) => {
       localStorage.setItem('ft_dark', isDark ? '1' : '0');
       document.getElementById('dark-toggle').textContent = isDark ? '☀️ Light Mode' : '🌙 Dark Mode';
     };
+    body.querySelector('#send-email-otp')?.addEventListener('click', async () => {
+      try {
+        const r = await Auth.requestEmailOtp();
+        document.getElementById('email-verify-box').style.display = 'block';
+        document.getElementById('email-otp-hint').textContent =
+          (r.dev_code ? 'Dev code: ' + r.dev_code + ' — ' : '') + r.message;
+      } catch (e) { UI.showError(e.message); }
+    });
+    body.querySelector('#confirm-email-otp')?.addEventListener('click', async () => {
+      try {
+        await Auth.verifyEmail(document.getElementById('email-otp-code').value);
+        UI.showSuccess('Email verified');
+        Router.navigate('#settings');
+      } catch (e) { UI.showError(e.message); }
+    });
+    body.querySelector('#send-phone-otp')?.addEventListener('click', async () => {
+      try {
+        const r = await Auth.requestPhoneOtp();
+        document.getElementById('phone-verify-box').style.display = 'block';
+        document.getElementById('phone-otp-hint').textContent =
+          (r.dev_code ? 'Dev code: ' + r.dev_code + ' — ' : '') + r.message;
+      } catch (e) { UI.showError(e.message); }
+    });
+    body.querySelector('#confirm-phone-otp')?.addEventListener('click', async () => {
+      try {
+        await Auth.verifyPhone(document.getElementById('phone-otp-code').value);
+        UI.showSuccess('Phone verified');
+        Router.navigate('#settings');
+      } catch (e) { UI.showError(e.message); }
+    });
     if (isAdmin) {
       document.querySelectorAll('.admin-toggle-active').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -1273,22 +1369,25 @@ Pages.settings = (app) => {
   }));
 };
 
-function renderAdminUsers(data) {
+function renderAdminUsers(data, callerRole) {
   if (!data || !data.users || data.users.length === 0) {
     return '<p style="color:var(--text-light);padding:12px 0">No users found or insufficient permissions.</p>';
   }
   return '<div class="table-container"><table><thead><tr>' +
     '<th>ID</th><th>Name</th><th>Email</th><th>Role</th><th>Active</th><th>MFA</th><th>Actions</th>' +
     '</tr></thead><tbody>' + data.users.map(u => {
-      const roleCls = u.role === 'admin' ? 'badge-danger' : u.role === 'enterprise' ? 'badge-warning' : u.role === 'verifier' ? 'badge-info' : 'badge-secondary';
+      const roleCls = u.role === 'superuser' ? 'badge-danger' : u.role === 'admin' ? 'badge-danger' : u.role === 'enterprise' ? 'badge-warning' : u.role === 'verifier' ? 'badge-info' : 'badge-secondary';
+      const canChangeRole = callerRole === 'superuser' || u.role !== 'superuser';
       return '<tr><td>' + u.id + '</td><td><strong>' + u.full_name + '</strong></td><td>' + u.email + '</td>' +
         '<td><span class="badge ' + roleCls + '">' + u.role + '</span></td>' +
         '<td>' + (u.is_active ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-danger">Inactive</span>') + '</td>' +
         '<td>' + (u.totp_enabled ? '<span class="badge badge-success">🔐</span>' : '<span class="badge badge-secondary">—</span>') + '</td>' +
         '<td><div style="display:flex;gap:4px;flex-wrap:wrap">' +
-        '<select class="fi admin-set-role" data-user-id="' + u.id + '" style="width:auto;padding:2px 6px;font-size:12px">' +
-        ['admin','enterprise','verifier','viewer'].map(r => '<option value="' + r + '"' + (r === u.role ? ' selected' : '') + '>' + r + '</option>').join('') +
-        '</select>' +
+        (canChangeRole
+          ? '<select class="fi admin-set-role" data-user-id="' + u.id + '" style="width:auto;padding:2px 6px;font-size:12px">' +
+            ['superuser','admin','enterprise','verifier','viewer'].map(r => '<option value="' + r + '"' + (r === u.role ? ' selected' : '') + '>' + r + '</option>').join('') +
+            '</select>'
+          : '<span class="badge badge-secondary">—</span>') +
         '<button class="btn btn-sm btn-outline admin-toggle-active" data-user-id="' + u.id + '">' + (u.is_active ? '🔒 Deactivate' : '🔓 Activate') + '</button>' +
         '</div></td></tr>';
     }).join('') + '</tbody></table></div>' +
@@ -2135,7 +2234,7 @@ Pages.setupTOTP = async () => {
           <button class="btn btn-primary" id="totp-verify-btn">Verify</button>
         </div>
       </div>`;
-    body.querySelector('#totp-verify-btn').onclick = async () => {
+    document.querySelector('#totp-verify-btn').onclick = async () => {
       try {
         await API.post('/auth/verify-totp', { code: document.getElementById('totp-code').value });
         UI.showSuccess('TOTP enabled successfully');

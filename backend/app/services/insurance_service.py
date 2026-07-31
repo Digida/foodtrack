@@ -22,7 +22,7 @@ async def create_policy(
     valid_from: datetime | None = None,
     valid_until: datetime | None = None,
 ) -> CargoPolicy:
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
 
     item = await db.get(TaxonomyItem, item_id)
@@ -84,7 +84,7 @@ async def file_claim(
     currency: str = "USD",
     documents: list[str] | None = None,
 ) -> InsuranceClaim:
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
 
     policy = await db.get(CargoPolicy, policy_id)
@@ -137,7 +137,7 @@ async def list_claims(db: AsyncSession, page: int = 1, status: str | None = None
 
 
 async def update_claim_status(db: AsyncSession, user: User, claim_id: int, new_status: ClaimStatus) -> InsuranceClaim:
-    if user.role != UserRole.ADMIN:
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
         raise PermissionError("Admin access required")
 
     claim = await db.get(InsuranceClaim, claim_id)

@@ -53,6 +53,21 @@ async def admin_user(db: AsyncSession) -> User:
 
 
 @pytest_asyncio.fixture
+async def superuser(db: AsyncSession) -> User:
+    user = User(
+        email="super@test.com",
+        full_name="Test Superuser",
+        hashed_password=hash_password("super123456"),
+        role=UserRole.SUPERUSER,
+        is_active=True,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
 async def enterprise_user(db: AsyncSession) -> User:
     user = User(
         email="enterprise@test.com",
@@ -85,6 +100,11 @@ async def viewer_user(db: AsyncSession) -> User:
 @pytest_asyncio.fixture
 async def admin_token(admin_user: User) -> str:
     return create_access_token({"sub": str(admin_user.id), "role": admin_user.role.value})
+
+
+@pytest_asyncio.fixture
+async def superuser_token(superuser: User) -> str:
+    return create_access_token({"sub": str(superuser.id), "role": superuser.role.value})
 
 
 @pytest_asyncio.fixture

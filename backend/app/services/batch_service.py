@@ -93,7 +93,7 @@ async def create_batch(db: AsyncSession, user: User, batch_number: str, product_
                        manufacturer_part_number: str | None = None,
                        production_date: str | None = None,
                        expiry_date: str | None = None, notes: str | None = None):
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
     prod = await db.get(Product, product_id)
     if not prod:
@@ -119,7 +119,7 @@ async def create_batch(db: AsyncSession, user: User, batch_number: str, product_
 
 
 async def update_batch(db: AsyncSession, user: User, batch_id: int, data: dict):
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
     b = await db.get(Batch, batch_id)
     if not b:
@@ -135,7 +135,7 @@ async def update_batch(db: AsyncSession, user: User, batch_id: int, data: dict):
 
 
 async def delete_batch(db: AsyncSession, user: User, batch_id: int):
-    if user.role != UserRole.ADMIN:
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
         raise PermissionError("Admin only")
     b = await db.get(Batch, batch_id)
     if not b:

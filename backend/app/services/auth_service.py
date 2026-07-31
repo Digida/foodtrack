@@ -74,16 +74,11 @@ async def authenticate_user(db: AsyncSession, email: str, password: str) -> tupl
         raise ValueError("Invalid credentials")
     if not user.is_active:
         raise ValueError("Account inactive")
-    mfa_type = None
+    # MFA is opt-in. Email/phone verification is a separate trust level and
+    # does NOT force an OTP challenge on every login — only TOTP does.
     if user.totp_enabled:
-        mfa_type = "totp"
-    elif user.phone_verified:
-        mfa_type = "phone"
-    elif user.email_verified:
-        mfa_type = "email"
-    if mfa_type:
-        temp_token = create_access_token({"sub": str(user.id), "step": "mfa", "mfa_type": mfa_type}, expires_delta=5)
-        return user, temp_token, {"requires_mfa": True, "mfa_type": mfa_type, "temp_token": temp_token}
+        temp_token = create_access_token({"sub": str(user.id), "step": "mfa", "mfa_type": "totp"}, expires_delta=5)
+        return user, temp_token, {"requires_mfa": True, "mfa_type": "totp", "temp_token": temp_token}
     token = create_access_token({"sub": str(user.id), "role": user.role.value, "tenant_id": user.tenant_id})
     return user, token, None
 
@@ -221,6 +216,72 @@ async def send_sms_otp(phone: str, code: str) -> bool:
         return False
 
 
+# --- Email / phone verification ---
+
+async def request_email_verification(db: AsyncSession, user: User) -> dict:
+    """Generate and deliver an email verification code.
+
+    The signed code token is stored on the user record (consumed on
+    successful verification). When no email service is configured and
+    RETURN_OTP_IN_DEV is enabled, the code is returned so the flow can
+    be completed in a demo/test environment.
+    """
+    if not user.email:
+        raise ValueError("No email address on file")
+    code, token = generate_email_otp()
+    user.mfa_otp_token = token
+    await db.commit()
+    sent = await send_email_otp(user.email, code)
+    return _verification_result("email", user.email, code, sent)
+
+
+async def verify_email_address(db: AsyncSession, user: User, code: str) -> None:
+    if not user.mfa_otp_token:
+        raise ValueError("No verification code has been requested")
+    if not verify_email_otp(user.mfa_otp_token, code):
+        raise ValueError("Invalid or expired verification code")
+    user.mfa_otp_token = None
+    user.email_verified = True
+    await db.commit()
+
+
+async def request_phone_verification(db: AsyncSession, user: User) -> dict:
+    """Generate and deliver a phone verification code (see email flow)."""
+    if not user.phone:
+        raise ValueError("No phone number on file")
+    code = generate_phone_otp()
+    token = serializer.dumps(code)
+    user.mfa_otp_token = token
+    await db.commit()
+    sent = await send_sms_otp(user.phone, code)
+    return _verification_result("phone", user.phone, code, sent)
+
+
+async def verify_phone_number(db: AsyncSession, user: User, code: str) -> None:
+    if not user.mfa_otp_token:
+        raise ValueError("No verification code has been requested")
+    if not verify_email_otp(user.mfa_otp_token, code):
+        raise ValueError("Invalid or expired verification code")
+    user.mfa_otp_token = None
+    user.phone_verified = True
+    await db.commit()
+
+
+def _verification_result(channel: str, target: str, code: str, sent: bool) -> dict:
+    result: dict = {
+        "sent": sent,
+        "channel": channel,
+        "target": target,
+        "message": (
+            "Verification code sent" if sent else
+            "No email/SMS service configured — code returned for development/testing"
+        ),
+    }
+    if not sent and settings.RETURN_OTP_IN_DEV:
+        result["dev_code"] = code
+    return result
+
+
 # --- SSO ---
 
 async def verify_social_token(provider: str, token: str) -> dict | None:
@@ -238,6 +299,16 @@ async def verify_social_token(provider: str, token: str) -> dict | None:
                 if resp.is_success:
                     data = resp.json()
                     return {"email": data["email"], "name": data.get("name", ""), "id": data["sub"]}
+        elif provider == "microsoft":
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    "https://graph.microsoft.com/v1.0/me",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+                if resp.is_success:
+                    data = resp.json()
+                    email = data.get("mail") or data.get("userPrincipalName") or ""
+                    return {"email": email, "name": data.get("displayName", ""), "id": data.get("id")}
         elif provider == "apple":
             raise NotImplementedError(
                 "Apple SSO requires an ES256 private key and signed client_secret. "
@@ -249,6 +320,35 @@ async def verify_social_token(provider: str, token: str) -> dict | None:
     except Exception:
         pass
     return None
+
+
+def list_sso_providers() -> list[dict]:
+    """Advertise the SSO providers available to the frontend.
+
+    `client_id` is exposed only so the browser can launch the real OAuth
+    flow — it is a public identifier. A missing client_id means the
+    provider is backend-ready but not yet configured for browser flow.
+    """
+    return [
+        {
+            "provider": "google",
+            "enabled": True,
+            "client_id": settings.GOOGLE_CLIENT_ID or None,
+            "redirect_uri": settings.SSO_REDIRECT_URI or None,
+        },
+        {
+            "provider": "microsoft",
+            "enabled": True,
+            "client_id": settings.MICROSOFT_CLIENT_ID or None,
+            "redirect_uri": settings.SSO_REDIRECT_URI or None,
+        },
+        {
+            "provider": "apple",
+            "enabled": False,
+            "client_id": None,
+            "reason": "Requires ES256 key configuration (APPLE_CLIENT_ID / APPLE_TEAM_ID / APPLE_KEY_ID)",
+        },
+    ]
 
 
 async def sso_login_or_register(db: AsyncSession, provider: str, token: str) -> tuple[User, str]:
@@ -295,7 +395,7 @@ async def get_user_by_biometric_credential(db: AsyncSession, credential_id: str)
 
 
 async def update_profile(db: AsyncSession, user: User, data: dict) -> User:
-    for field in ("full_name", "company", "phone"):
+    for field in ("full_name", "company", "phone", "alternate_email", "alternate_phone"):
         if field in data and data[field] is not None:
             setattr(user, field, data[field])
     await db.commit()
@@ -317,6 +417,26 @@ async def change_password(db: AsyncSession, user: User, old_password: str, new_p
 PAGE_SIZE_USERS = 20
 
 
+def serialize_user(u: User) -> dict:
+    return {
+        "id": u.id,
+        "email": u.email,
+        "full_name": u.full_name,
+        "company": u.company,
+        "phone": u.phone,
+        "alternate_email": u.alternate_email,
+        "alternate_phone": u.alternate_phone,
+        "role": u.role.value if hasattr(u.role, "value") else str(u.role),
+        "is_active": u.is_active,
+        "email_verified": u.email_verified,
+        "phone_verified": u.phone_verified,
+        "totp_enabled": u.totp_enabled,
+        "sso_provider": u.sso_provider,
+        "tenant_id": u.tenant_id,
+        "created_at": u.created_at.isoformat() if u.created_at else None,
+    }
+
+
 async def list_users(db: AsyncSession, page: int = 1) -> dict:
     from sqlalchemy import func
     q = select(User).order_by(User.created_at.desc())
@@ -324,16 +444,7 @@ async def list_users(db: AsyncSession, page: int = 1) -> dict:
     total = (await db.execute(count_q)).scalar() or 0
     offset = (page - 1) * PAGE_SIZE_USERS
     items = (await db.execute(q.offset(offset).limit(PAGE_SIZE_USERS))).scalars().all()
-    result = []
-    for u in items:
-        result.append({
-            "id": u.id, "email": u.email, "full_name": u.full_name,
-            "company": u.company, "phone": u.phone,
-            "role": u.role.value if hasattr(u.role, "value") else str(u.role),
-            "is_active": u.is_active, "email_verified": u.email_verified,
-            "totp_enabled": u.totp_enabled,
-            "created_at": u.created_at.isoformat() if u.created_at else None,
-        })
+    result = [serialize_user(u) for u in items]
     return {"users": result, "total": total, "page": page, "total_pages": max(1, (total + PAGE_SIZE_USERS - 1) // PAGE_SIZE_USERS)}
 
 
@@ -342,13 +453,19 @@ async def get_user_by_id(db: AsyncSession, user_id: int) -> User | None:
 
 
 async def update_user_role(db: AsyncSession, admin_user: User, target_user_id: int, new_role: UserRole) -> User:
-    if admin_user.role != UserRole.ADMIN:
-        raise PermissionError("Only admins can change roles")
+    if admin_user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
+        raise PermissionError("Only superusers and admins can change roles")
     if target_user_id == admin_user.id:
         raise ValueError("Cannot change your own role")
     target = await db.get(User, target_user_id)
     if not target:
         raise ValueError("User not found")
+    # Superuser accounts can only be managed by another superuser
+    if target.role == UserRole.SUPERUSER and admin_user.role != UserRole.SUPERUSER:
+        raise PermissionError("Only a superuser can manage superuser accounts")
+    # Granting superuser requires superuser privileges
+    if new_role == UserRole.SUPERUSER and admin_user.role != UserRole.SUPERUSER:
+        raise PermissionError("Only a superuser can grant the superuser role")
     target.role = new_role
     await db.commit()
     await db.refresh(target)
@@ -356,13 +473,15 @@ async def update_user_role(db: AsyncSession, admin_user: User, target_user_id: i
 
 
 async def toggle_user_active(db: AsyncSession, admin_user: User, target_user_id: int) -> User:
-    if admin_user.role != UserRole.ADMIN:
-        raise PermissionError("Only admins can toggle user status")
+    if admin_user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
+        raise PermissionError("Only superusers and admins can toggle user status")
     if target_user_id == admin_user.id:
         raise ValueError("Cannot deactivate yourself")
     target = await db.get(User, target_user_id)
     if not target:
         raise ValueError("User not found")
+    if target.role == UserRole.SUPERUSER and admin_user.role != UserRole.SUPERUSER:
+        raise PermissionError("Only a superuser can manage superuser accounts")
     target.is_active = not target.is_active
     await db.commit()
     await db.refresh(target)

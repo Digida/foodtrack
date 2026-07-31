@@ -49,9 +49,12 @@ class UserDetailResponse(BaseModel):
     full_name: str
     company: str | None = None
     phone: str | None = None
+    alternate_email: str | None = None
+    alternate_phone: str | None = None
     role: str
     is_active: bool
     email_verified: bool
+    phone_verified: bool = False
     totp_enabled: bool
 
     model_config = ConfigDict(from_attributes=True)

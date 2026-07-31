@@ -20,7 +20,7 @@ async def publish_event(
     channel: str,
     payload: dict[str, Any],
 ) -> dict:
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Only ADMIN and ENTERPRISE can publish events")
 
     event_log = EventLog(
@@ -92,7 +92,7 @@ async def register_webhook(
     events: list[str] | None = None,
     secret: str | None = None,
 ) -> WebhookSubscription:
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Only ADMIN and ENTERPRISE can register webhooks")
 
     sub = WebhookSubscription(
@@ -109,7 +109,7 @@ async def register_webhook(
 
 
 async def list_webhooks(db: AsyncSession, user: User) -> list[dict]:
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
 
     subs = await db.execute(
@@ -128,7 +128,7 @@ async def list_webhooks(db: AsyncSession, user: User) -> list[dict]:
 
 
 async def delete_webhook(db: AsyncSession, user: User, webhook_id: int):
-    if user.role != UserRole.ADMIN:
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
         raise PermissionError("Admin access required")
 
     sub = await db.get(WebhookSubscription, webhook_id)

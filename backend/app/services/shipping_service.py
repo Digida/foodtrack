@@ -116,7 +116,7 @@ async def create_shipment(db: AsyncSession, user: User, shipment_number: str, mo
                           total_weight_kg: float | None = None,
                           total_volume_m3: float | None = None,
                           notes: str | None = None):
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
     existing = await db.execute(select(Shipment).where(Shipment.shipment_number == shipment_number))
     if existing.scalar_one_or_none():
@@ -141,7 +141,7 @@ async def create_shipment(db: AsyncSession, user: User, shipment_number: str, mo
 
 
 async def update_shipment(db: AsyncSession, user: User, shipment_id: int, data: dict):
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
     s = await db.get(Shipment, shipment_id)
     if not s:
@@ -157,7 +157,7 @@ async def update_shipment(db: AsyncSession, user: User, shipment_id: int, data: 
 
 
 async def add_batch_to_shipment(db: AsyncSession, user: User, shipment_id: int, batch_id: int, quantity: int):
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
     s = await db.get(Shipment, shipment_id)
     if not s:
@@ -196,7 +196,7 @@ async def add_shipment_tracking_event(db: AsyncSession, user: User, shipment_id:
 
 
 async def delete_shipment(db: AsyncSession, user: User, shipment_id: int):
-    if user.role != UserRole.ADMIN:
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
         raise PermissionError("Admin only")
     s = await db.get(Shipment, shipment_id)
     if not s:

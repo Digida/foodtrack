@@ -97,18 +97,24 @@ async def get_current_tenant(
 
 
 async def require_admin(user: User = Depends(get_current_user)) -> User:
-    if user.role != UserRole.ADMIN:
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
 
+async def require_superuser(user: User = Depends(get_current_user)) -> User:
+    if user.role != UserRole.SUPERUSER:
+        raise HTTPException(status_code=403, detail="Superuser access required")
+    return user
+
+
 async def require_enterprise_or_admin(user: User = Depends(get_current_user)) -> User:
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise HTTPException(status_code=403, detail="Enterprise or Admin access required")
     return user
 
 
 async def require_verifier_or_above(user: User = Depends(get_current_user)) -> User:
-    if user.role == UserRole.VIEWER:
+    if user.role in (UserRole.VIEWER,):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     return user

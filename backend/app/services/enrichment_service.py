@@ -15,7 +15,7 @@ PAGE_SIZE = 20
 
 
 async def enrich_collection_from_feed(db: AsyncSession, user: User, collection_id: int) -> dict:
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Only ADMIN and ENTERPRISE can trigger feed enrichment")
 
     collection = await db.get(Collection, collection_id)
@@ -51,7 +51,7 @@ async def enrich_collection_from_feed(db: AsyncSession, user: User, collection_i
 
 
 async def enrich_taxonomy_from_web(db: AsyncSession, user: User) -> dict:
-    if user.role != UserRole.ADMIN:
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
         raise PermissionError("Admin access required")
 
     log = EnrichmentLog(source=EnrichmentSource.WEB_SEARCH, status=EnrichmentStatus.RUNNING, entity_type="taxonomy", triggered_by=user.id)
@@ -100,7 +100,7 @@ async def enrich_taxonomy_from_web(db: AsyncSession, user: User) -> dict:
 
 
 async def suggest_taxonomy_nodes(db: AsyncSession, user: User, item_id: int) -> dict:
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
 
     item = await db.get(TaxonomyItem, item_id)
@@ -131,7 +131,7 @@ async def suggest_taxonomy_nodes(db: AsyncSession, user: User, item_id: int) -> 
 
 
 async def auto_categorize_collection(db: AsyncSession, user: User, collection_id: int) -> dict:
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
 
     collection = await db.get(Collection, collection_id)
@@ -164,7 +164,7 @@ async def auto_categorize_collection(db: AsyncSession, user: User, collection_id
 
 
 async def suggest_collection_items(db: AsyncSession, user: User, collection_id: int) -> dict:
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
 
     collection = await db.get(Collection, collection_id)
@@ -199,7 +199,7 @@ async def suggest_collection_items(db: AsyncSession, user: User, collection_id: 
 
 
 async def backfill_item_data(db: AsyncSession, user: User) -> dict:
-    if user.role not in (UserRole.ADMIN, UserRole.ENTERPRISE):
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
         raise PermissionError("Insufficient permissions")
 
     log = EnrichmentLog(source=EnrichmentSource.NUTRITION_API, status=EnrichmentStatus.RUNNING, entity_type="backfill", triggered_by=user.id)
@@ -328,7 +328,7 @@ async def list_enrichment_suggestions(db: AsyncSession, page: int = 1, status: s
 
 
 async def update_suggestion_status(db: AsyncSession, user: User, suggestion_id: int, new_status: str) -> EnrichmentSuggestion:
-    if user.role != UserRole.ADMIN:
+    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
         raise PermissionError("Admin access required to update suggestions")
 
     suggestion = await db.get(EnrichmentSuggestion, suggestion_id)

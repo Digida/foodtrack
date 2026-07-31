@@ -257,6 +257,8 @@ async def _run_seeding() -> None:
 
     try:
         await _seed_taxonomy_and_items()
+        await _seed_collections()
+        await _seed_users()
         ss["status"] = "done"
         logger.info({
             "msg": "Seeding complete",
@@ -283,18 +285,24 @@ async def _seed_taxonomy_and_items() -> None:
     from seed_more_items import (
         NEW_CATEGORIES, LOCAL_NAMES_NEW, NUTRITION_NEW,
     )
+    from seed_industry_categories import (
+        INDUSTRY_CATEGORIES, LOCAL_NAMES_INDUSTRY, NUTRITION_INDUSTRY,
+    )
 
     all_categories: dict = {}
     all_categories.update(FOOD_CATEGORIES)
     all_categories.update(NEW_CATEGORIES)
+    all_categories.update(INDUSTRY_CATEGORIES)
 
     all_local_names: dict = {}
     all_local_names.update(LOCAL_NAMES)
     all_local_names.update(LOCAL_NAMES_NEW)
+    all_local_names.update(LOCAL_NAMES_INDUSTRY)
 
     all_nutrition: dict = {}
     all_nutrition.update(NUTRITION)
     all_nutrition.update(NUTRITION_NEW)
+    all_nutrition.update(NUTRITION_INDUSTRY)
 
     # Announce all sections up-front so the status endpoint shows them
     for cat_name in all_categories:
@@ -378,6 +386,63 @@ async def _seed_taxonomy_and_items() -> None:
             # Yield to the event loop between categories so the server
             # stays responsive during large seed operations
             await asyncio.sleep(0)
+
+
+async def _seed_collections() -> None:
+    """
+    Idempotent, incremental collection seed.
+
+    Derives one collection per top-level taxonomy node so the
+    categorization layer (collections) is wired into the cataloguing
+    architecture (taxonomy nodes / items).
+    """
+    from app.services.collection_service import seed_collections_from_taxonomy
+
+    sec = _state["seeding"]["sections"]["collections"] = {
+        "status":   "pending",
+        "expected": 0,
+        "seeded":   0,
+        "missing":  0,
+    }
+
+    async with async_session() as db:
+        result = await seed_collections_from_taxonomy(db)
+
+    sec["expected"] = result["nodes"]
+    sec["seeded"]   = result["items"]
+    sec["missing"]  = 0
+    sec["status"]   = "done"
+    _state["seeding"]["total_inserted"] += result["items"] + result["collections"]
+    logger.info({"msg": "Collections seeded from taxonomy", **result})
+
+
+# ── User / tenant seeding ─────────────────────────────────────────────────────
+
+async def _seed_users() -> None:
+    """
+    Idempotent, incremental user seed.
+
+    Creates the default tenant plus the Superuser and Admin demo accounts
+    used for client walkthroughs (see user_seed_service.DEMO_ACCOUNTS).
+    """
+    from app.services.user_seed_service import seed_default_users
+
+    sec = _state["seeding"]["sections"]["users"] = {
+        "status":   "pending",
+        "expected": 0,
+        "seeded":   0,
+        "missing":  0,
+    }
+
+    async with async_session() as db:
+        result = await seed_default_users(db)
+
+    sec["expected"] = result["created"] + result["existing"]
+    sec["seeded"]   = result["created"]
+    sec["missing"]  = 0
+    sec["status"]   = "done"
+    _state["seeding"]["total_inserted"] += result["created"]
+    logger.info({"msg": "Users seeded", **result})
 
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
