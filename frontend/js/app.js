@@ -110,6 +110,8 @@
   Router.add('mfa-verify', Pages.mfaVerify);
   Router.add('search', Pages.search);
   Router.add('search/:query', Pages.search);
+  Router.add('bulking', Pages.bulking);
+  Router.add('bulking/:id', Pages.bulkingRegister);
   Router.add('dashboard', Pages.dashboard);
   Router.add('products', Pages.products);
   Router.add('product/:id', Pages.productDetail);

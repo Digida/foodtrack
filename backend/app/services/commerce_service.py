@@ -28,6 +28,7 @@ from sqlalchemy.orm import selectinload
 from app.models.user import User, UserRole
 from app.models.taxonomy import TaxonomyItem
 from app.models.tracking import Warehouse
+from app.models.certificate import Certificate
 from app.models.commerce import (
     Appointment, AppointmentStatus,
     BulkingRegister, RegisterStatus, SourcingMode,
@@ -38,6 +39,8 @@ from app.models.commerce import (
     Deal, DealStatus,
     Payment, PaymentMethod, PaymentStatus,
     Settlement, SettlementStatus,
+    BulkingJobAssignment, BulkingJobRole, BulkingJobStatus,
+    PackingRecord, PackingStatus,
 )
 
 PAGE_SIZE = 20
@@ -160,6 +163,19 @@ _PAYMENT_TRANSITIONS: dict[PaymentStatus, set[PaymentStatus]] = {
     PaymentStatus.SUCCEEDED: set(),
     PaymentStatus.FAILED: set(),
     PaymentStatus.REFUNDED: set(),
+}
+
+_BULKING_JOB_TRANSITIONS: dict[BulkingJobStatus, set[BulkingJobStatus]] = {
+    BulkingJobStatus.ASSIGNED: {BulkingJobStatus.IN_PROGRESS, BulkingJobStatus.CANCELLED},
+    BulkingJobStatus.IN_PROGRESS: {BulkingJobStatus.COMPLETED, BulkingJobStatus.CANCELLED},
+    BulkingJobStatus.COMPLETED: set(),
+    BulkingJobStatus.CANCELLED: set(),
+}
+
+_PACKING_TRANSITIONS: dict[PackingStatus, set[PackingStatus]] = {
+    PackingStatus.PACKED: {PackingStatus.CERTIFIED, PackingStatus.CANCELLED},
+    PackingStatus.CERTIFIED: set(),
+    PackingStatus.CANCELLED: set(),
 }
 
 
@@ -338,6 +354,43 @@ def _settlement_out(s: Settlement, item: TaxonomyItem | None = None) -> dict:
     }
 
 
+def _job_out(j: BulkingJobAssignment, item: TaxonomyItem | None = None) -> dict:
+    return {
+        "id": j.id,
+        "register_id": j.register_id,
+        **(_item_summary(item or (j.item if hasattr(j, "item") else None)) if item is not None else {}),
+        "role": j.role.value if hasattr(j.role, "value") else str(j.role),
+        "assignee_id": j.assignee_id,
+        "assignee_name": j.assignee_name,
+        "assignee_location": j.assignee_location,
+        "status": j.status.value if hasattr(j.status, "value") else str(j.status),
+        "notes": j.notes,
+        "assigned_at": str(j.assigned_at) if j.assigned_at else None,
+        "completed_at": str(j.completed_at) if j.completed_at else None,
+        "created_at": str(j.created_at) if j.created_at else None,
+    }
+
+
+def _packing_out(p: PackingRecord, item: TaxonomyItem | None = None) -> dict:
+    return {
+        "id": p.id,
+        "register_id": p.register_id,
+        **(_item_summary(item or (p.item if hasattr(p, "item") else None)) if item is not None else {}),
+        "quantity": p.quantity,
+        "unit": p.unit,
+        "package_type": p.package_type,
+        "package_count": p.package_count,
+        "total_weight_kg": p.total_weight_kg,
+        "certificate_id": p.certificate_id,
+        "status": p.status.value if hasattr(p.status, "value") else str(p.status),
+        "packed_by_id": p.packed_by_id,
+        "packed_by_name": p.packed_by_name,
+        "notes": p.notes,
+        "packed_at": str(p.packed_at) if p.packed_at else None,
+        "created_at": str(p.created_at) if p.created_at else None,
+    }
+
+
 async def _get_register(db: AsyncSession, register_id: int) -> BulkingRegister | None:
     return await db.get(BulkingRegister, register_id)
 
@@ -369,6 +422,14 @@ async def _register_detail(db: AsyncSession, r: BulkingRegister, user: User | No
     payments = (await db.execute(
         select(Payment).where(Payment.register_id == r.id).order_by(Payment.created_at)
     )).scalars().all()
+    job_assignments = (await db.execute(
+        select(BulkingJobAssignment).where(BulkingJobAssignment.register_id == r.id)
+        .order_by(BulkingJobAssignment.created_at)
+    )).scalars().all()
+    packing_records = (await db.execute(
+        select(PackingRecord).where(PackingRecord.register_id == r.id)
+        .order_by(PackingRecord.created_at)
+    )).scalars().all()
 
     accepted_volume = sum(b.quantity for b in bids if b.status == BidStatus.ACCEPTED)
     return {
@@ -396,6 +457,8 @@ async def _register_detail(db: AsyncSession, r: BulkingRegister, user: User | No
         "deals": [_deal_out(d) for d in deals],
         "settlements": [_settlement_out(s) for s in settlements],
         "payments": [_payment_out(p) for p in payments],
+        "job_assignments": [_job_out(j) for j in job_assignments],
+        "packing_records": [_packing_out(p) for p in packing_records],
     }
 
 
@@ -1147,6 +1210,192 @@ async def list_payments(db: AsyncSession, user: User, page: int = 1) -> dict:
 
 def list_payment_methods() -> list[dict]:
     return SUPPORTED_PAYMENT_METHODS
+
+
+# ── Pipeline jobs (Clerks, Verifiers, Couriers) ─────────────────────────────
+
+async def list_job_candidates(db: AsyncSession, user: User, register_id: int) -> list[dict]:
+    """Users in the item's locus eligible for pipeline job assignment.
+
+    The locus is scoped to the register's tenant users when one exists,
+    otherwise every active user on the platform. The buyer (acting user) is
+    excluded so jobs are assigned to distinct workers."""
+    register = await _get_register(db, register_id)
+    if not register:
+        raise ValueError("Register not found")
+    if not _is_admin(user) and register.buyer_id != user.id:
+        raise PermissionError("Not your register")
+
+    q = select(User).where(User.is_active.is_(True), User.id != user.id)
+    if register.tenant_id:
+        q = q.where(User.tenant_id == register.tenant_id)
+    rows = (await db.execute(q.order_by(User.full_name.asc()))).scalars().all()
+    return [
+        {
+            "id": u.id,
+            "name": u.full_name,
+            "email": u.email,
+            "company": u.company,
+            "role": u.role.value if hasattr(u.role, "value") else str(u.role),
+        }
+        for u in rows
+    ]
+
+
+async def create_job_assignment(
+    db: AsyncSession, user: User, register_id: int, role: BulkingJobRole,
+    assignee_id: int | None = None, assignee_name: str | None = None,
+    assignee_location: str | None = None, notes: str | None = None,
+) -> BulkingJobAssignment:
+    register = await _get_register(db, register_id)
+    if not register:
+        raise ValueError("Register not found")
+    if not _is_admin(user) and register.buyer_id != user.id:
+        raise PermissionError("Not your register")
+    if not role:
+        raise ValueError("role is required")
+    if register.status in (RegisterStatus.CLOSED, RegisterStatus.CANCELLED):
+        raise ValueError("Cannot assign jobs to a closed or cancelled register")
+
+    assignee = None
+    if assignee_id:
+        assignee = await db.get(User, assignee_id)
+        if not assignee or not assignee.is_active:
+            raise ValueError("Assignee user not found or inactive")
+        if not assignee_name:
+            assignee_name = assignee.full_name
+    if not assignee_name or not assignee_name.strip():
+        raise ValueError("assignee_name is required")
+
+    assignment = BulkingJobAssignment(
+        register_id=register_id, item_id=register.item_id, tenant_id=register.tenant_id,
+        role=role, assignee_id=assignee.id if assignee else None,
+        assignee_name=assignee_name, assignee_location=assignee_location,
+        status=BulkingJobStatus.ASSIGNED, notes=notes,
+    )
+    db.add(assignment)
+    await db.commit()
+    await db.refresh(assignment)
+    return assignment
+
+
+async def list_job_assignments(db: AsyncSession, user: User, register_id: int) -> list[dict]:
+    register = await _get_register(db, register_id)
+    if not register:
+        raise ValueError("Register not found")
+    if not _is_admin(user) and register.buyer_id != user.id:
+        raise PermissionError("Not your register")
+    rows = (await db.execute(
+        select(BulkingJobAssignment).where(BulkingJobAssignment.register_id == register_id)
+        .order_by(BulkingJobAssignment.created_at)
+    )).scalars().all()
+    return [_job_out(j) for j in rows]
+
+
+async def update_job_assignment_status(
+    db: AsyncSession, user: User, assignment_id: int, status: BulkingJobStatus,
+) -> BulkingJobAssignment:
+    assignment = await db.get(BulkingJobAssignment, assignment_id)
+    if not assignment:
+        raise ValueError("Job assignment not found")
+    register = await _get_register(db, assignment.register_id)
+    if not _is_admin(user) and register.buyer_id != user.id:
+        raise PermissionError("Not your register")
+    _ensure_transition("job assignment", assignment.status, status, _BULKING_JOB_TRANSITIONS)
+    assignment.status = status
+    if status == BulkingJobStatus.COMPLETED and not assignment.completed_at:
+        assignment.completed_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(assignment)
+    return assignment
+
+
+# ── Packing & certification ─────────────────────────────────────────────────
+
+async def create_packing_record(
+    db: AsyncSession, user: User, register_id: int, quantity: float,
+    unit: str | None = None, package_type: str | None = None,
+    package_count: int | None = None, total_weight_kg: float | None = None,
+    certificate_id: str | None = None, packed_by_id: int | None = None,
+    notes: str | None = None,
+) -> PackingRecord:
+    register = await _get_register(db, register_id)
+    if not register:
+        raise ValueError("Register not found")
+    if not _is_admin(user) and register.buyer_id != user.id:
+        raise PermissionError("Not your register")
+    if quantity <= 0:
+        raise ValueError("quantity must be greater than 0")
+    if package_count is not None and package_count <= 0:
+        raise ValueError("package_count must be greater than 0")
+    if total_weight_kg is not None and total_weight_kg <= 0:
+        raise ValueError("total_weight_kg must be greater than 0")
+    if certificate_id:
+        cert = (await db.execute(
+            select(Certificate).where(Certificate.certificate_id == certificate_id)
+        )).scalar_one_or_none()
+        if not cert:
+            raise ValueError("Certificate not found")
+        if cert.item_id is not None and cert.item_id != register.item_id:
+            raise ValueError("Certificate does not belong to the register's item")
+
+    packed_by = await db.get(User, packed_by_id) if packed_by_id else None
+    record = PackingRecord(
+        register_id=register_id, item_id=register.item_id, tenant_id=register.tenant_id,
+        quantity=quantity, unit=unit or register.unit or "kg",
+        package_type=package_type, package_count=package_count,
+        total_weight_kg=total_weight_kg, certificate_id=certificate_id,
+        status=PackingStatus.CERTIFIED if certificate_id else PackingStatus.PACKED,
+        packed_by_id=packed_by.id if packed_by else user.id,
+        packed_by_name=packed_by.full_name if packed_by else user.full_name,
+        notes=notes,
+    )
+    db.add(record)
+    await db.commit()
+    await db.refresh(record)
+    return record
+
+
+async def list_packing_records(db: AsyncSession, user: User, register_id: int) -> list[dict]:
+    register = await _get_register(db, register_id)
+    if not register:
+        raise ValueError("Register not found")
+    if not _is_admin(user) and register.buyer_id != user.id:
+        raise PermissionError("Not your register")
+    rows = (await db.execute(
+        select(PackingRecord).where(PackingRecord.register_id == register_id)
+        .order_by(PackingRecord.created_at)
+    )).scalars().all()
+    return [_packing_out(p) for p in rows]
+
+
+async def update_packing_status(
+    db: AsyncSession, user: User, packing_id: int, status: PackingStatus,
+    certificate_id: str | None = None,
+) -> PackingRecord:
+    record = await db.get(PackingRecord, packing_id)
+    if not record:
+        raise ValueError("Packing record not found")
+    register = await _get_register(db, record.register_id)
+    if not _is_admin(user) and register.buyer_id != user.id:
+        raise PermissionError("Not your register")
+    _ensure_transition("packing record", record.status, status, _PACKING_TRANSITIONS)
+    if status == PackingStatus.CERTIFIED:
+        cert_id = certificate_id or record.certificate_id
+        if not cert_id:
+            raise ValueError("certificate_id is required to certify a packing record")
+        cert = (await db.execute(
+            select(Certificate).where(Certificate.certificate_id == cert_id)
+        )).scalar_one_or_none()
+        if not cert:
+            raise ValueError("Certificate not found")
+        if cert.item_id is not None and cert.item_id != register.item_id:
+            raise ValueError("Certificate does not belong to the register's item")
+        record.certificate_id = cert_id
+    record.status = status
+    await db.commit()
+    await db.refresh(record)
+    return record
 
 
 # ── Business dashboard ─────────────────────────────────────────────────────

@@ -28,8 +28,9 @@ from app.models.commerce import (
     Appointment, AppointmentStatus, SourcingMode, RegisterStatus, ContactType,
     BidStatus, DealStatus, WarehouseBookingStatus, CourierJobStatus, PaymentMethod,
     PaymentStatus, SettlementStatus,
+    BulkingJobRole, BulkingJobStatus, PackingStatus,
     BulkingRegister, BulkingContact, BulkingBid, WarehouseBooking, CourierJob,
-    Deal, Payment, Settlement,
+    Deal, Payment, Settlement, BulkingJobAssignment, PackingRecord,
 )
 
 __all__ = [
@@ -62,6 +63,8 @@ __all__ = [
     "SourcingMode", "RegisterStatus", "ContactType", "BidStatus", "DealStatus",
     "WarehouseBookingStatus", "CourierJobStatus", "PaymentMethod", "PaymentStatus",
     "SettlementStatus",
+    "BulkingJobRole", "BulkingJobStatus", "PackingStatus",
     "BulkingRegister", "BulkingContact", "BulkingBid", "WarehouseBooking",
     "CourierJob", "Deal", "Payment", "Settlement",
+    "BulkingJobAssignment", "PackingRecord",
 ]

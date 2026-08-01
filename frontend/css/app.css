@@ -633,3 +633,21 @@ tr:hover td { background: #f1f5f3; }
 .collection-card .cc-title { font-size: 16px; font-weight: 700; }
 .collection-card .cc-desc { font-size: 13px; color: var(--text-light); margin-top: 4px; }
 .collection-card .cc-meta { font-size: 12px; color: var(--text-light); margin-top: 6px; }
+
+/* ─── BULKING PIPELINE ─────────────────────── */
+.bulk-steps { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+.bulk-step {
+  flex: 1; min-width: 120px; display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg-card);
+}
+.bulk-step.done { border-color: var(--primary); background: rgba(26,107,60,0.06); }
+.bulk-step-icon {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(26,107,60,0.1); font-size: 16px;
+}
+.bulk-step.done .bulk-step-icon { background: var(--primary); color: #fff; }
+.bulk-step-label { font-size: 13px; font-weight: 600; }
+.bulk-section { margin-top: 20px; }
+.bulk-toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }

@@ -15,7 +15,7 @@ from app.models.user import User
 from app.models.commerce import (
     AppointmentStatus, RegisterStatus, SourcingMode,
     ContactType, BidStatus, WarehouseBookingStatus, CourierJobStatus,
-    DealStatus, PaymentMethod,
+    DealStatus, PaymentMethod, BulkingJobRole, BulkingJobStatus, PackingStatus,
 )
 from app.services.commerce_service import (
     book_appointment, list_appointments, update_appointment_status,
@@ -28,6 +28,9 @@ from app.services.commerce_service import (
     calculate_settlements, list_settlements, mark_settlement_paid,
     initiate_payment, confirm_payment, list_payments, list_payment_methods,
     get_business_dashboard,
+    list_job_candidates, create_job_assignment, list_job_assignments,
+    update_job_assignment_status,
+    create_packing_record, list_packing_records, update_packing_status,
 )
 from app.utils.dependencies import get_current_user
 
@@ -565,6 +568,140 @@ async def api_payment_methods(
     user: User = Depends(get_current_user),
 ):
     return {"methods": list_payment_methods()}
+
+
+# ── Pipeline jobs (Clerks, Verifiers, Couriers) ────────────────────────────
+
+class JobAssignmentCreate(BaseModel):
+    role: BulkingJobRole
+    assignee_id: int | None = None
+    assignee_name: str | None = None
+    assignee_location: str | None = None
+    notes: str | None = None
+
+
+class JobAssignmentStatusUpdate(BaseModel):
+    status: BulkingJobStatus
+
+
+@router.get("/registers/{register_id}/job-candidates")
+async def api_list_job_candidates(
+    register_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return {"candidates": await list_job_candidates(db, user, register_id)}
+    except (ValueError, PermissionError) as e:
+        _raise(e)
+
+
+@router.post("/registers/{register_id}/job-assignments")
+async def api_create_job_assignment(
+    register_id: int,
+    req: JobAssignmentCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        assignment = await create_job_assignment(
+            db, user, register_id, req.role,
+            assignee_id=req.assignee_id, assignee_name=req.assignee_name,
+            assignee_location=req.assignee_location, notes=req.notes,
+        )
+    except (ValueError, PermissionError) as e:
+        _raise(e)
+    return {"id": assignment.id, "role": assignment.role.value, "status": assignment.status.value}
+
+
+@router.get("/registers/{register_id}/job-assignments")
+async def api_list_job_assignments(
+    register_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return {"job_assignments": await list_job_assignments(db, user, register_id)}
+    except (ValueError, PermissionError) as e:
+        _raise(e)
+
+
+@router.patch("/job-assignments/{assignment_id}/status")
+async def api_update_job_assignment_status(
+    assignment_id: int,
+    req: JobAssignmentStatusUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        assignment = await update_job_assignment_status(db, user, assignment_id, req.status)
+    except (ValueError, PermissionError) as e:
+        _raise(e)
+    return {"id": assignment.id, "status": assignment.status.value}
+
+
+# ── Packing & certification ────────────────────────────────────────────────
+
+class PackingRecordCreate(BaseModel):
+    quantity: float
+    unit: str | None = None
+    package_type: str | None = None
+    package_count: int | None = None
+    total_weight_kg: float | None = None
+    certificate_id: str | None = None
+    packed_by_id: int | None = None
+    notes: str | None = None
+
+
+class PackingStatusUpdate(BaseModel):
+    status: PackingStatus
+    certificate_id: str | None = None
+
+
+@router.post("/registers/{register_id}/packing-records")
+async def api_create_packing_record(
+    register_id: int,
+    req: PackingRecordCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        record = await create_packing_record(
+            db, user, register_id, req.quantity,
+            unit=req.unit, package_type=req.package_type,
+            package_count=req.package_count, total_weight_kg=req.total_weight_kg,
+            certificate_id=req.certificate_id, packed_by_id=req.packed_by_id,
+            notes=req.notes,
+        )
+    except (ValueError, PermissionError) as e:
+        _raise(e)
+    return {"id": record.id, "status": record.status.value}
+
+
+@router.get("/registers/{register_id}/packing-records")
+async def api_list_packing_records(
+    register_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return {"packing_records": await list_packing_records(db, user, register_id)}
+    except (ValueError, PermissionError) as e:
+        _raise(e)
+
+
+@router.patch("/packing-records/{packing_id}/status")
+async def api_update_packing_status(
+    packing_id: int,
+    req: PackingStatusUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        record = await update_packing_status(db, user, packing_id, req.status, certificate_id=req.certificate_id)
+    except (ValueError, PermissionError) as e:
+        _raise(e)
+    return {"id": record.id, "status": record.status.value}
 
 
 # ── Business dashboard ─────────────────────────────────────────────────────

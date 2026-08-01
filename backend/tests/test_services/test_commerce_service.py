@@ -16,6 +16,8 @@ from sqlalchemy import select
 from app.models.commerce import (
     AppointmentStatus,
     BulkingBid, BidStatus,
+    BulkingJobRole, BulkingJobStatus,
+    PackingStatus,
     CourierJobStatus,
     Deal, DealStatus,
     Payment, PaymentMethod, PaymentStatus,
@@ -25,6 +27,7 @@ from app.models.commerce import (
 )
 from app.models.taxonomy import TaxonomyItem
 from app.models.tracking import Warehouse
+from app.models.certificate import CertificateType
 from app.services import commerce_service
 from app.services.commerce_service import (
     book_appointment,
@@ -33,14 +36,21 @@ from app.services.commerce_service import (
     close_deal,
     confirm_payment,
     create_bulking_register,
+    create_job_assignment,
+    create_packing_record,
     exchange_credentials,
     initiate_payment,
+    list_job_assignments,
+    list_job_candidates,
+    list_packing_records,
     list_settlements,
     mark_settlement_paid,
     post_courier_job,
     submit_bid,
     update_appointment_status,
     update_courier_job_status,
+    update_job_assignment_status,
+    update_packing_status,
     update_register_status,
     update_warehouse_booking_status,
 )
@@ -379,3 +389,122 @@ async def test_auto_aggregate_register(db: AsyncSession, admin_user, taxonomy_it
     bids = (await db.execute(select(BulkingBid).where(BulkingBid.register_id == register.id))).scalars().all()
     assert len(bids) == 5
     assert all(b.status == BidStatus.PENDING for b in bids)
+
+
+# ── Pipeline jobs (Clerks, Verifiers, Couriers) ─────────────────────────────
+
+@pytest.mark.asyncio
+async def test_create_job_assignment_and_candidates(db: AsyncSession, admin_user, enterprise_user, viewer_user, taxonomy_item):
+    register = await create_bulking_register(db, admin_user, taxonomy_item.id, target_quantity=500)
+
+    candidates = await list_job_candidates(db, admin_user, register.id)
+    ids = {c["id"] for c in candidates}
+    assert enterprise_user.id in ids
+    assert viewer_user.id in ids
+    assert admin_user.id not in ids  # buyer excluded
+
+    assignment = await create_job_assignment(
+        db, admin_user, register.id, BulkingJobRole.VERIFIER,
+        assignee_id=enterprise_user.id, notes="Inspect quality grade",
+    )
+    assert assignment.status == BulkingJobStatus.ASSIGNED
+    assert assignment.role == BulkingJobRole.VERIFIER
+    assert assignment.assignee_name == enterprise_user.full_name
+    assert assignment.item_id == taxonomy_item.id
+
+    rows = await list_job_assignments(db, admin_user, register.id)
+    assert len(rows) == 1
+    assert rows[0]["assignee_id"] == enterprise_user.id
+
+
+@pytest.mark.asyncio
+async def test_create_job_assignment_requires_name(db: AsyncSession, admin_user, taxonomy_item):
+    register = await create_bulking_register(db, admin_user, taxonomy_item.id, target_quantity=500)
+    with pytest.raises(ValueError, match="assignee_name"):
+        await create_job_assignment(db, admin_user, register.id, BulkingJobRole.CLERK)
+
+
+@pytest.mark.asyncio
+async def test_job_assignment_foreign_register_denied(db: AsyncSession, admin_user, viewer_user, enterprise_user, taxonomy_item):
+    register = await create_bulking_register(db, admin_user, taxonomy_item.id, target_quantity=500)
+    with pytest.raises(PermissionError):
+        await create_job_assignment(db, viewer_user, register.id, BulkingJobRole.COURIER)
+
+
+@pytest.mark.asyncio
+async def test_job_assignment_transitions(db: AsyncSession, admin_user, enterprise_user, taxonomy_item):
+    register = await create_bulking_register(db, admin_user, taxonomy_item.id, target_quantity=500)
+    assignment = await create_job_assignment(
+        db, admin_user, register.id, BulkingJobRole.COURIER,
+        assignee_id=enterprise_user.id,
+    )
+
+    # ASSIGNED -> COMPLETED is invalid (must pass through IN_PROGRESS)
+    with pytest.raises(ValueError, match="Cannot transition job assignment"):
+        await update_job_assignment_status(db, admin_user, assignment.id, BulkingJobStatus.COMPLETED)
+
+    assignment = await update_job_assignment_status(db, admin_user, assignment.id, BulkingJobStatus.IN_PROGRESS)
+    assert assignment.status == BulkingJobStatus.IN_PROGRESS
+
+    assignment = await update_job_assignment_status(db, admin_user, assignment.id, BulkingJobStatus.COMPLETED)
+    assert assignment.status == BulkingJobStatus.COMPLETED
+    assert assignment.completed_at is not None
+
+
+# ── Packing & certification ─────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_create_and_certify_packing_record(db: AsyncSession, admin_user, taxonomy_item):
+    register = await create_bulking_register(db, admin_user, taxonomy_item.id, target_quantity=500)
+    record = await create_packing_record(
+        db, admin_user, register.id, quantity=450, unit="kg",
+        package_type="carton", package_count=90, total_weight_kg=510,
+    )
+    assert record.status == PackingStatus.PACKED
+    assert record.packed_by_name == admin_user.full_name
+
+    cert = await issue_packing_certificate(db, admin_user, taxonomy_item.id)
+    record = await update_packing_status(
+        db, admin_user, record.id, PackingStatus.CERTIFIED,
+        certificate_id=cert.certificate_id,
+    )
+    assert record.status == PackingStatus.CERTIFIED
+    assert record.certificate_id == cert.certificate_id
+
+
+@pytest.mark.asyncio
+async def test_create_packing_record_validation(db: AsyncSession, admin_user, taxonomy_item):
+    register = await create_bulking_register(db, admin_user, taxonomy_item.id, target_quantity=500)
+    with pytest.raises(ValueError, match="quantity"):
+        await create_packing_record(db, admin_user, register.id, quantity=0)
+
+
+@pytest.mark.asyncio
+async def test_certify_packing_without_certificate_rejected(db: AsyncSession, admin_user, taxonomy_item):
+    register = await create_bulking_register(db, admin_user, taxonomy_item.id, target_quantity=500)
+    record = await create_packing_record(db, admin_user, register.id, quantity=450)
+    with pytest.raises(ValueError, match="certificate_id"):
+        await update_packing_status(db, admin_user, record.id, PackingStatus.CERTIFIED)
+
+
+@pytest.mark.asyncio
+async def test_packing_records_listed(db: AsyncSession, admin_user, taxonomy_item):
+    register = await create_bulking_register(db, admin_user, taxonomy_item.id, target_quantity=500)
+    await create_packing_record(db, admin_user, register.id, quantity=100)
+    await create_packing_record(db, admin_user, register.id, quantity=150)
+    rows = await list_packing_records(db, admin_user, register.id)
+    assert len(rows) == 2
+
+
+from app.services.certificate_service import issue_certificate as _issue_certificate
+
+
+async def issue_packing_certificate(db, user, item_id) -> "Certificate":
+    cert = await _issue_certificate(
+        db, user, product_id=None, cert_type=CertificateType.QUALITY,
+        issuing_body="FoodTrack Labs", recipient_entity="Bulked Stock",
+        description="Quality certificate for bulked lot",
+        expiry_date=None, document_url=None, metadata_json=None,
+        item_id=item_id,
+    )
+    return cert

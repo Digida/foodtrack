@@ -19,13 +19,15 @@ def upgrade() -> None:
     bind = op.get_bind()
     dialect = bind.dialect.name
 
-    # Normalize legacy string flags to 0/1 before the column type changes.
+    # Normalize legacy string flags to 1/0 before the column type changes.
+    # Values must fit the existing VARCHAR(1) column (Postgres enforces length,
+    # unlike SQLite, so 'true'/'false' would be truncated).
+    op.execute("UPDATE item_rates SET is_active = '1' WHERE is_active IN ('Y', 'y', '1', 'true', 't')")
+    op.execute(
+        "UPDATE item_rates SET is_active = '0' "
+        "WHERE is_active IS NOT NULL AND is_active NOT IN ('Y', 'y', '1', 'true', 't')"
+    )
     if dialect == "postgresql":
-        op.execute("UPDATE item_rates SET is_active = 'true' WHERE is_active IN ('Y', 'y', '1', 'true', 't')")
-        op.execute(
-            "UPDATE item_rates SET is_active = 'false' "
-            "WHERE is_active IS NOT NULL AND is_active NOT IN ('Y', 'y', '1', 'true', 't')"
-        )
         with op.batch_alter_table("item_rates", schema=None) as batch_op:
             batch_op.alter_column(
                 "price_per_kg",
@@ -38,14 +40,9 @@ def upgrade() -> None:
                 type_=sa.Boolean(),
                 existing_type=sa.String(1),
                 existing_nullable=True,
-                server_default=sa.text("true"),
+                postgresql_using="is_active::boolean",
             )
     else:
-        op.execute("UPDATE item_rates SET is_active = '1' WHERE is_active IN ('Y', 'y', '1', 'true', 't')")
-        op.execute(
-            "UPDATE item_rates SET is_active = '0' "
-            "WHERE is_active IS NOT NULL AND is_active NOT IN ('Y', 'y', '1', 'true', 't')"
-        )
         with op.batch_alter_table("item_rates", schema=None) as batch_op:
             batch_op.alter_column(
                 "price_per_kg",

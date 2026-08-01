@@ -104,6 +104,27 @@ class SettlementStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
+class BulkingJobRole(str, enum.Enum):
+    """Pipeline roles assumed by users in the item's locus. Clerks collate and
+    receive goods, Verifiers inspect and certify quality, Couriers move stock."""
+    CLERK = "clerk"
+    VERIFIER = "verifier"
+    COURIER = "courier"
+
+
+class BulkingJobStatus(str, enum.Enum):
+    ASSIGNED = "assigned"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class PackingStatus(str, enum.Enum):
+    PACKED = "packed"
+    CERTIFIED = "certified"
+    CANCELLED = "cancelled"
+
+
 class Appointment(Base):
     """Booking for an appointment (e.g. a buyer meeting a farmer/cooperative to
     close a deal on aggregated stock)."""
@@ -166,6 +187,8 @@ class BulkingRegister(Base):
     deals = relationship("Deal", back_populates="register", cascade="all, delete-orphan")
     settlements = relationship("Settlement", back_populates="register", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="register")
+    job_assignments = relationship("BulkingJobAssignment", back_populates="register", cascade="all, delete-orphan")
+    packing_records = relationship("PackingRecord", back_populates="register", cascade="all, delete-orphan")
 
 
 class BulkingContact(Base):
@@ -354,3 +377,59 @@ class Settlement(Base):
     item = relationship("TaxonomyItem")
     tenant = relationship("Tenant", back_populates="settlements")
     payment = relationship("Payment", back_populates="settlement")
+
+
+class BulkingJobAssignment(Base):
+    """A user from the item's locus assigned a pipeline role — Clerk, Verifier or
+    Courier — for a bulking register. Job assignments drive the receiving,
+    inspection/certification and transport stages of the bulking pipeline."""
+    __tablename__ = "bulking_job_assignments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    register_id = Column(Integer, ForeignKey("bulking_registers.id"), nullable=False, index=True)
+    item_id = Column(Integer, ForeignKey("taxonomy_items.id"), nullable=False, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    role = Column(SAEnum(BulkingJobRole, native_enum=False), nullable=False)
+    assignee_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    assignee_name = Column(String(255), nullable=False)
+    assignee_location = Column(String(255), nullable=True)
+    status = Column(SAEnum(BulkingJobStatus, native_enum=False), default=BulkingJobStatus.ASSIGNED)
+    notes = Column(Text, nullable=True)
+    assigned_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    register = relationship("BulkingRegister", back_populates="job_assignments")
+    item = relationship("TaxonomyItem")
+    tenant = relationship("Tenant", back_populates="bulking_job_assignments")
+    assignee = relationship("User")
+
+
+class PackingRecord(Base):
+    """Packing record for aggregated (bulked) stock. Goods are packed into
+    containers (cartons, crates, pallets) and, once quality is verified, linked
+    to a certificate that certifies the packed lot."""
+    __tablename__ = "bulking_packing_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    register_id = Column(Integer, ForeignKey("bulking_registers.id"), nullable=False, index=True)
+    item_id = Column(Integer, ForeignKey("taxonomy_items.id"), nullable=False, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    quantity = Column(Float, nullable=False)
+    unit = Column(String(50), nullable=True)
+    package_type = Column(String(100), nullable=True)
+    package_count = Column(Integer, nullable=True)
+    total_weight_kg = Column(Float, nullable=True)
+    certificate_id = Column(String(100), nullable=True, index=True)
+    status = Column(SAEnum(PackingStatus, native_enum=False), default=PackingStatus.PACKED)
+    packed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    packed_by_name = Column(String(255), nullable=True)
+    notes = Column(Text, nullable=True)
+    packed_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    register = relationship("BulkingRegister", back_populates="packing_records")
+    item = relationship("TaxonomyItem")
+    tenant = relationship("Tenant", back_populates="packing_records")
+    packed_by = relationship("User")

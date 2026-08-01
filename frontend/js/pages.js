@@ -1650,6 +1650,714 @@ Pages.search = (app, query) => {
   }));
 };
 
+// ─── BULKING PIPELINE ───────────────────────────────────────────
+
+const _bulkFmt = (d) => d ? new Date(d).toLocaleDateString() : '—';
+const _bulkNum = (n) => (n === null || n === undefined || n === '' || isNaN(parseFloat(n))) ? null : parseFloat(n);
+const _bulkMoney = (n, c) => (n === null || n === undefined) ? '—' : `${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${c || ''}`.trim();
+const _bulkBadge = (s, map, fallbackLabel) => {
+  const m = map[s] || ['badge-secondary', fallbackLabel || s || '—'];
+  return `<span class="badge ${m[0]}">${m[1]}</span>`;
+};
+const _BULK_REG = { draft: ['badge-secondary', 'Draft'], sourcing: ['badge-info', 'Sourcing'], aggregated: ['badge-warning', 'Aggregated'], closed: ['badge-success', 'Closed'], cancelled: ['badge-danger', 'Cancelled'] };
+const _BULK_BID = { pending: ['badge-secondary', 'Pending'], accepted: ['badge-success', 'Accepted'], rejected: ['badge-danger', 'Rejected'], withdrawn: ['badge-secondary', 'Withdrawn'] };
+const _BULK_DEAL = { negotiating: ['badge-info', 'Negotiating'], agreed: ['badge-warning', 'Agreed'], closed: ['badge-success', 'Closed'], cancelled: ['badge-danger', 'Cancelled'] };
+const _BULK_PAY = { pending: ['badge-secondary', 'Pending'], processing: ['badge-info', 'Processing'], succeeded: ['badge-success', 'Succeeded'], failed: ['badge-danger', 'Failed'], refunded: ['badge-secondary', 'Refunded'] };
+const _BULK_SET = { pending: ['badge-secondary', 'Pending'], paid: ['badge-success', 'Paid'], failed: ['badge-danger', 'Failed'], cancelled: ['badge-secondary', 'Cancelled'] };
+const _BULK_BOOK = { requested: ['badge-secondary', 'Requested'], confirmed: ['badge-info', 'Confirmed'], in_use: ['badge-success', 'In Use'], completed: ['badge-success', 'Completed'], cancelled: ['badge-danger', 'Cancelled'] };
+const _BULK_COURIER = { posted: ['badge-secondary', 'Posted'], assigned: ['badge-info', 'Assigned'], in_transit: ['badge-warning', 'In Transit'], delivered: ['badge-success', 'Delivered'], cancelled: ['badge-danger', 'Cancelled'] };
+const _BULK_JOB = { assigned: ['badge-info', 'Assigned'], in_progress: ['badge-warning', 'In Progress'], completed: ['badge-success', 'Completed'], cancelled: ['badge-danger', 'Cancelled'] };
+const _BULK_PACK = { packed: ['badge-info', 'Packed'], certified: ['badge-success', 'Certified'], cancelled: ['badge-danger', 'Cancelled'] };
+const _BULK_CONTACT = { farmer: ['badge-info', 'Farmer'], cooperative: ['badge-success', 'Cooperative'], aggregator: ['badge-warning', 'Aggregator'], trader: ['badge-secondary', 'Trader'] };
+const _BULK_ROLE = { clerk: ['badge-info', 'Clerk'], verifier: ['badge-warning', 'Verifier'], courier: ['badge-secondary', 'Courier'] };
+const _BULK_CERT = { draft: ['badge-secondary', 'Draft'], issued: ['badge-info', 'Issued'], verified: ['badge-success', 'Verified'], active: ['badge-success', 'Active'], revoked: ['badge-danger', 'Revoked'], expired: ['badge-secondary', 'Expired'] };
+const _BULK_METHOD = { stripe: ['badge-info', 'Stripe'], mpesa: ['badge-info', 'M-Pesa'], airtel_money: ['badge-info', 'Airtel Money'], mtn_momo: ['badge-info', 'MTN MoMo'], visa: ['badge-info', 'Visa'], mastercard: ['badge-info', 'Mastercard'], bank_transfer: ['badge-info', 'Bank Transfer'], cash: ['badge-secondary', 'Cash'] };
+const _bulkCurrencies = () => ['USD', 'EUR', 'GBP', 'KES', 'UGX', 'TZS', 'NGN', 'GHS', 'RWF', 'ZMW', 'EGP', 'ZAR'].map(c => `<option>${c}</option>`).join('');
+let _curBulkRegId = null;
+const _bulkRefresh = () => { if (_curBulkRegId) Router.navigate(`#bulking/${_curBulkRegId}`); };
+
+Pages.bulking = (app) => {
+  app.appendChild(UI.layout('Bulking', async () => {
+    const [d, regs] = await Promise.all([
+      API.get('/commerce/dashboard'),
+      API.get('/commerce/registers'),
+    ]);
+    const body = document.createElement('div');
+    const rows = (regs.registers || []).map(r => `
+      <tr>
+        <td><a href="#bulking/${r.id}"><strong>${r.register_number}</strong></a></td>
+        <td>${r.item_name || '—'}</td>
+        <td>${_bulkNum(r.target_quantity)} ${r.unit || ''}</td>
+        <td>${_bulkMoney(r.target_price, r.currency)}</td>
+        <td>${_bulkBadge(r.status, _BULK_REG)}</td>
+        <td>${_bulkFmt(r.created_at)}</td>
+        <td><a href="#bulking/${r.id}" class="btn btn-sm btn-outline">Open</a></td>
+      </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--text-light)">No registers yet — start a new bulking pipeline.</td></tr>';
+    body.innerHTML = `
+      <div class="card-grid card-grid-4">
+        ${UI.statCard(d.registers.total, 'Registers').outerHTML}
+        ${UI.statCard(d.contacts, 'Contacts').outerHTML}
+        ${UI.statCard(`${d.bids.accepted}/${d.bids.total}`, 'Bids Accepted').outerHTML}
+        ${UI.statCard(_bulkMoney(d.settlements.paid_value_total, 'USD'), 'Paid Value').outerHTML}
+      </div>
+      <div class="card" style="margin-top:20px">
+        <div class="card-header"><h3>Bulking Registers</h3>
+          <button class="btn btn-primary btn-sm" onclick="Pages.bulkCreateRegister()">+ New Register</button>
+        </div>
+        <div class="table-container"><table><thead><tr><th>Register</th><th>Item</th><th>Target</th><th>Target Price</th><th>Status</th><th>Created</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+      </div>`;
+    const tb = document.getElementById('topbar-actions');
+    if (tb) tb.innerHTML = '<button class="btn btn-primary btn-sm" onclick="Pages.bulkCreateRegister()">+ New Register</button>';
+    return body;
+  }));
+};
+
+Pages.bulkingRegister = (app, id) => {
+  _curBulkRegId = id;
+  app.appendChild(UI.layout('Bulking Register', async () => {
+    const r = await API.get(`/commerce/registers/${id}`);
+    let certs = [];
+    try { certs = (await API.get(`/certificates/by-item/${r.item_id}`)).certificates || []; } catch (_) {}
+    let warehouses = [];
+    try { warehouses = (await API.get('/warehouses')).warehouses || []; } catch (_) {}
+    const whName = (wid) => { const w = warehouses.find(x => x.id === wid); return w ? w.name : (wid || '—'); };
+
+    const body = document.createElement('div');
+    const itemName = r.item_name || '—';
+    const acceptedBids = (r.bids || []).filter(b => b.status === 'accepted');
+    const hasDeals = (r.deals || []).length > 0;
+    const hasJobs = (r.job_assignments || []).length > 0;
+    const hasCerts = certs.some(c => ['issued', 'verified', 'active'].includes(c.status));
+    const hasPacked = (r.packing_records || []).length > 0;
+
+    const stages = [
+      ['Collate', '🤝', acceptedBids.length > 0],
+      ['Purchase', '🛒', hasDeals],
+      ['Assign Jobs', '🧑‍🔧', hasJobs],
+      ['Certify', '📜', hasCerts],
+      ['Pack', '📦', hasPacked],
+    ];
+    const stageHtml = `<div class="bulk-steps">${stages.map(([label, icon, done]) => `
+      <div class="bulk-step ${done ? 'done' : ''}"><div class="bulk-step-icon">${done ? '✓' : icon}</div><div class="bulk-step-label">${label}</div></div>`).join('')}</div>`;
+
+    const regStatusBtns = (() => {
+      const s = r.status;
+      const btns = [];
+      if (s === 'draft') btns.push(`<button class="btn btn-sm btn-primary" onclick="Pages.bulkSetRegStatus(${r.id},'sourcing')">Start Sourcing</button>`);
+      if (s === 'draft' || s === 'sourcing') btns.push(`<button class="btn btn-sm btn-success" onclick="Pages.bulkSetRegStatus(${r.id},'aggregated')">Mark Aggregated</button>`);
+      if (['draft', 'sourcing', 'aggregated'].includes(s)) btns.push(`<button class="btn btn-sm btn-outline" onclick="Pages.bulkSetRegStatus(${r.id},'closed')">Close</button>`);
+      if (!['closed', 'cancelled'].includes(s)) btns.push(`<button class="btn btn-sm btn-outline" onclick="Pages.bulkSetRegStatus(${r.id},'cancelled')">Cancel</button>`);
+      return btns.join(' ');
+    })();
+
+    const contactRows = (r.contacts || []).map(c => `
+      <tr><td>${c.name}</td><td>${_bulkBadge(c.contact_type, _BULK_CONTACT)}</td><td>${c.phone || '—'}</td><td>${c.email || '—'}</td><td>${c.location || '—'}</td><td>${c.is_primary ? '⭐' : '—'}</td></tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-light)">No contacts yet.</td></tr>';
+
+    const bidRows = (r.bids || []).map(b => `
+      <tr><td>${_bulkNum(b.quantity)} ${b.unit || ''}</td><td>${_bulkMoney(b.unit_price, b.currency)}</td><td>${b.quality_grade || '—'}</td><td>${_bulkBadge(b.status, _BULK_BID)}</td><td>${_bulkFmt(b.created_at)}</td><td>${b.status === 'pending' ? `<button class="btn btn-sm btn-success" onclick="Pages.bulkAcceptBid(${b.id})">Accept</button> <button class="btn btn-sm btn-outline" onclick="Pages.bulkRejectBid(${b.id})">Reject</button>` : '—'}</td></tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-light)">No bids yet.</td></tr>';
+
+    const dealRows = (r.deals || []).map(d => `
+      <tr><td>${d.seller_name || '—'}</td><td>${_bulkNum(d.quantity)} ${d.unit || ''}</td><td>${_bulkMoney(d.unit_price, d.currency)}</td><td><strong>${_bulkMoney(d.total_value, d.currency)}</strong></td><td>${_bulkBadge(d.status, _BULK_DEAL)}</td><td>${d.credentials_exchanged ? '✓' : '—'}</td><td>${d.status !== 'closed' && d.status !== 'cancelled' ? `<button class="btn btn-sm btn-outline" onclick="Pages.bulkExchangeCreds(${d.id})">Exchange Credentials</button>` : '—'}</td></tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text-light)">No deals closed yet.</td></tr>';
+
+    const setRows = (r.settlements || []).map(s => `
+      <tr><td>${s.payee_name || '—'}</td><td>${_bulkNum(s.quantity)} ${s.unit || ''}</td><td>${_bulkMoney(s.gross_amount, s.currency)}</td><td>${_bulkMoney(s.platform_fee, s.currency)}</td><td><strong>${_bulkMoney(s.net_amount, s.currency)}</strong></td><td>${_bulkBadge(s.status, _BULK_SET)}</td><td>${s.status === 'pending' ? `<button class="btn btn-sm btn-success" onclick="Pages.bulkMarkPaid(${s.id})">Mark Paid</button>` : '—'}</td></tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text-light)">Run "Calculate Settlements" to generate settlement lines.</td></tr>';
+
+    const payRows = (r.payments || []).map(p => `
+      <tr><td>${_bulkMoney(p.amount, p.currency)}</td><td>${_bulkBadge(p.method, _BULK_METHOD)}</td><td>${p.provider_reference || '—'}</td><td>${_bulkBadge(p.status, _BULK_PAY)}</td><td>${_bulkFmt(p.created_at)}</td><td>${['pending', 'processing'].includes(p.status) ? `<button class="btn btn-sm btn-success" onclick="Pages.bulkConfirmPayment(${p.id})">Confirm</button>` : '—'}</td></tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-light)">No payments initiated.</td></tr>';
+
+    const bookRows = (r.warehouse_bookings || []).map(b => `
+      <tr><td>${whName(b.warehouse_id)}</td><td>${_bulkFmt(b.start_date)} → ${_bulkFmt(b.end_date)}</td><td>${_bulkNum(b.quantity)} ${b.unit || ''}</td><td>${_bulkMoney(b.storage_cost, b.currency)}</td><td>${_bulkBadge(b.status, _BULK_BOOK)}</td></tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-light)">No warehouse booked yet.</td></tr>';
+
+    const courierRows = (r.courier_jobs || []).map(j => `
+      <tr><td>${j.pickup_location || '—'}</td><td>${_bulkNum(j.quantity)} ${j.unit || ''}</td><td>${j.weight_kg ? _bulkNum(j.weight_kg) + ' kg' : '—'}</td><td>${_bulkMoney(j.budget, j.currency)}</td><td>${j.courier_name || '—'}</td><td>${j.tracking_code || '—'}</td><td>${_bulkBadge(j.status, _BULK_COURIER)}</td></tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--text-light)">No courier jobs posted.</td></tr>';
+
+    const jobRows = (r.job_assignments || []).map(j => {
+      const next = j.status === 'assigned' ? ['in_progress', 'Start'] : j.status === 'in_progress' ? ['completed', 'Complete'] : null;
+      const ctrl = next
+        ? `<button class="btn btn-sm btn-outline" onclick="Pages.bulkSetJobStatus(${j.id},'${next[0]}')">${next[1]}</button> <button class="btn btn-sm btn-outline" onclick="Pages.bulkSetJobStatus(${j.id},'cancelled')">Cancel</button>`
+        : '—';
+      return `<tr><td>${_bulkBadge(j.role, _BULK_ROLE)}</td><td>${j.assignee_name || '—'}</td><td>${j.assignee_location || '—'}</td><td>${_bulkBadge(j.status, _BULK_JOB)}</td><td>${j.notes || '—'}</td><td>${ctrl}</td></tr>`;
+    }).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--text-light)">No pipeline jobs assigned yet.</td></tr>';
+
+    const certRows = certs.map(c => `
+      <tr><td><a href="#certificate/${c.certificate_id}">${c.certificate_id}</a></td><td>${String(c.type).toUpperCase()}</td><td>${_bulkBadge(c.status, _BULK_CERT)}</td><td>${_bulkFmt(c.issued_date)}</td><td>${_bulkFmt(c.expiry_date)}</td></tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-light)">No certificates issued for this item yet.</td></tr>';
+
+    const packRows = (r.packing_records || []).map(p => {
+      const ctrl = p.status === 'packed'
+        ? `<button class="btn btn-sm btn-success" onclick="Pages.bulkCertifyPacking(${p.id},${r.item_id},'${p.certificate_id || ''}')">Certify</button> <button class="btn btn-sm btn-outline" onclick="Pages.bulkCancelPacking(${p.id})">Cancel</button>`
+        : '—';
+      return `<tr><td>${_bulkNum(p.quantity)} ${p.unit || ''}</td><td>${p.package_type || '—'}</td><td>${p.package_count || '—'}</td><td>${p.total_weight_kg ? _bulkNum(p.total_weight_kg) + ' kg' : '—'}</td><td>${p.certificate_id ? `<a href="#certificate/${p.certificate_id}">${p.certificate_id}</a>` : '—'}</td><td>${_bulkBadge(p.status, _BULK_PACK)}</td><td>${p.packed_by_name || '—'}</td><td>${ctrl}</td></tr>`;
+    }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text-light)">No packing records yet.</td></tr>';
+
+    body.innerHTML = `
+      ${stageHtml}
+      <div class="card">
+        <div class="card-header"><h3>${r.register_number} — ${itemName}</h3>
+          <span>${_bulkBadge(r.status, _BULK_REG)}</span>
+        </div>
+        <div class="inv-grid">
+          <div>
+            <div class="info-row"><div class="info-label">Item Code</div><div class="info-value">${r.item_code || '—'}</div></div>
+            <div class="info-row"><div class="info-label">Target Quantity</div><div class="info-value">${_bulkNum(r.target_quantity)} ${r.unit || ''}</div></div>
+            <div class="info-row"><div class="info-label">Target Price</div><div class="info-value">${_bulkMoney(r.target_price, r.currency)}</div></div>
+            <div class="info-row"><div class="info-label">Accepted Volume</div><div class="info-value">${_bulkNum(r.accepted_volume)} ${r.unit || ''}</div></div>
+          </div>
+          <div>
+            <div class="info-row"><div class="info-label">Region</div><div class="info-value">${r.region || '—'}</div></div>
+            <div class="info-row"><div class="info-label">Sourcing Mode</div><div class="info-value">${String(r.sourcing_mode).replace(/_/g, ' ').toUpperCase() || '—'}</div></div>
+            <div class="info-row"><div class="info-label">Created</div><div class="info-value">${_bulkFmt(r.created_at)}</div></div>
+            <div class="info-row"><div class="info-label">Notes</div><div class="info-value">${r.notes || '—'}</div></div>
+          </div>
+        </div>
+        <div class="bulk-toolbar" style="margin-top:12px">${regStatusBtns}</div>
+      </div>
+
+      <div class="card bulk-section">
+        <div class="card-header"><h3>🤝 1. Collate</h3></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+          <button class="btn btn-sm btn-primary" onclick="Pages.bulkAddContact(${r.id})">+ Add Contact</button>
+          <button class="btn btn-sm btn-accent" onclick="Pages.bulkAddBid(${r.id})">+ Add Bid</button>
+        </div>
+        <h4 style="margin:12px 0 8px;font-size:13px;color:var(--text-light)">Contacts</h4>
+        <div class="table-container"><table><thead><tr><th>Name</th><th>Type</th><th>Phone</th><th>Email</th><th>Location</th><th>Primary</th></tr></thead><tbody>${contactRows}</tbody></table></div>
+        <h4 style="margin:16px 0 8px;font-size:13px;color:var(--text-light)">Bids</h4>
+        <div class="table-container"><table><thead><tr><th>Quantity</th><th>Unit Price</th><th>Grade</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead><tbody>${bidRows}</tbody></table></div>
+      </div>
+
+      <div class="card bulk-section">
+        <div class="card-header"><h3>🛒 2. Purchase</h3></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+          <button class="btn btn-sm btn-primary" onclick="Pages.bulkCloseDeal(${r.id})">+ Close Deal</button>
+          <button class="btn btn-sm btn-accent" onclick="Pages.bulkCalcSettlements(${r.id})">Calculate Settlements</button>
+          <button class="btn btn-sm btn-accent" onclick="Pages.bulkInitiatePayment(${r.id})">+ Initiate Payment</button>
+          <button class="btn btn-sm btn-outline" onclick="Pages.bulkBookWarehouse(${r.id})">Book Warehouse</button>
+          <button class="btn btn-sm btn-outline" onclick="Pages.bulkPostCourier(${r.id})">Post Courier Job</button>
+        </div>
+        <h4 style="margin:12px 0 8px;font-size:13px;color:var(--text-light)">Deals</h4>
+        <div class="table-container"><table><thead><tr><th>Seller</th><th>Quantity</th><th>Unit Price</th><th>Total</th><th>Status</th><th>Creds</th><th>Actions</th></tr></thead><tbody>${dealRows}</tbody></table></div>
+        <h4 style="margin:16px 0 8px;font-size:13px;color:var(--text-light)">Settlements</h4>
+        <div class="table-container"><table><thead><tr><th>Payee</th><th>Quantity</th><th>Gross</th><th>Fee</th><th>Net</th><th>Status</th><th>Actions</th></tr></thead><tbody>${setRows}</tbody></table></div>
+        <h4 style="margin:16px 0 8px;font-size:13px;color:var(--text-light)">Payments</h4>
+        <div class="table-container"><table><thead><tr><th>Amount</th><th>Method</th><th>Reference</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead><tbody>${payRows}</tbody></table></div>
+        <h4 style="margin:16px 0 8px;font-size:13px;color:var(--text-light)">Warehouse Bookings</h4>
+        <div class="table-container"><table><thead><tr><th>Warehouse</th><th>Period</th><th>Quantity</th><th>Cost</th><th>Status</th></tr></thead><tbody>${bookRows}</tbody></table></div>
+        <h4 style="margin:16px 0 8px;font-size:13px;color:var(--text-light)">Courier Jobs</h4>
+        <div class="table-container"><table><thead><tr><th>Pickup</th><th>Quantity</th><th>Weight</th><th>Budget</th><th>Courier</th><th>Tracking</th><th>Status</th></tr></thead><tbody>${courierRows}</tbody></table></div>
+      </div>
+
+      <div class="card bulk-section">
+        <div class="card-header"><h3>🧑‍🔧 3. Assign Jobs</h3>
+          <button class="btn btn-primary btn-sm" onclick="Pages.bulkAssignJob(${r.id})">+ Assign Job</button>
+        </div>
+        <p style="font-size:13px;color:var(--text-light);margin-bottom:8px">Locus users take pipeline roles: <strong>Clerks</strong> collate & receive, <strong>Verifiers</strong> inspect quality, <strong>Couriers</strong> move stock.</p>
+        <div class="table-container"><table><thead><tr><th>Role</th><th>Assignee</th><th>Location</th><th>Status</th><th>Notes</th><th>Actions</th></tr></thead><tbody>${jobRows}</tbody></table></div>
+      </div>
+
+      <div class="card bulk-section">
+        <div class="card-header"><h3>📜 4. Certify</h3>
+          <button class="btn btn-primary btn-sm" onclick="Pages.bulkIssueCert(${r.item_id})">+ Issue Certificate</button>
+        </div>
+        <div class="table-container"><table><thead><tr><th>Certificate</th><th>Type</th><th>Status</th><th>Issued</th><th>Expires</th></tr></thead><tbody>${certRows}</tbody></table></div>
+      </div>
+
+      <div class="card bulk-section">
+        <div class="card-header"><h3>📦 5. Pack</h3>
+          <button class="btn btn-primary btn-sm" onclick="Pages.bulkCreatePacking(${r.id},${r.item_id})">+ Create Packing Record</button>
+        </div>
+        <p style="font-size:13px;color:var(--text-light);margin-bottom:8px">Records the packaged output. Certifying a record links it to an issued certificate for the item.</p>
+        <div class="table-container"><table><thead><tr><th>Quantity</th><th>Package Type</th><th>Count</th><th>Weight</th><th>Certificate</th><th>Status</th><th>Packed By</th><th>Actions</th></tr></thead><tbody>${packRows}</tbody></table></div>
+      </div>`;
+
+    return body;
+  }));
+};
+
+Pages.bulkCreateRegister = () => {
+  const state = { id: null };
+  const m = UI.modal('New Bulking Register', `
+    <div class="form-group" style="position:relative"><label>Item *</label>
+      <input id="bq-item-search" class="fi" placeholder="Type to search taxonomy items...">
+      <div class="autocomplete-dropdown" id="bq-item-dd"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Target Quantity *</label><input id="bq-qty" type="number" step="any" class="fi" placeholder="e.g. 500"></div>
+      <div class="form-group"><label>Unit</label><input id="bq-unit" class="fi" placeholder="kg, MT, crates..."></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Target Price</label><input id="bq-price" type="number" step="any" class="fi"></div>
+      <div class="form-group"><label>Currency</label><select id="bq-cur" class="fi">${_bulkCurrencies()}</select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Region</label><input id="bq-region" class="fi" placeholder="e.g. Lake Zone, Tanzania"></div>
+      <div class="form-group"><label>Sourcing Mode</label><select id="bq-mode" class="fi"><option value="self">Self-Sourced</option><option value="cooperative">Cooperative</option><option value="aggregator_network">Aggregator Network</option><option value="marketplace">Marketplace</option></select></div>
+    </div>
+    <div class="form-group"><label>Title</label><input id="bq-title" class="fi" placeholder="Optional title"></div>
+    <div class="form-group"><label>Notes</label><textarea id="bq-notes" class="fi" rows="2"></textarea></div>
+  `);
+  setTimeout(() => {
+    const input = document.getElementById('bq-item-search');
+    const dd = document.getElementById('bq-item-dd');
+    if (!input || !dd) return;
+    let t = null;
+    input.addEventListener('input', () => {
+      clearTimeout(t);
+      const v = input.value.trim();
+      if (v.length < 2) { dd.innerHTML = ''; dd.classList.remove('open'); state.id = null; return; }
+      t = setTimeout(async () => {
+        try {
+          const data = await API.get(`/search/autocomplete?q=${encodeURIComponent(v)}&limit=8`);
+          const items = (data.results || []).filter(r => r.type === 'taxonomy_item');
+          if (!items.length) { dd.innerHTML = ''; dd.classList.remove('open'); return; }
+          dd.innerHTML = items.map(r => `<div class="autocomplete-item" data-id="${String(r.url).split('/').pop()}"><span>${r.label}</span></div>`).join('');
+          dd.classList.add('open');
+        } catch (_) { dd.innerHTML = ''; dd.classList.remove('open'); }
+      }, 250);
+    });
+    dd.addEventListener('mousedown', (e) => {
+      const it = e.target.closest('.autocomplete-item');
+      if (!it) return;
+      e.preventDefault();
+      state.id = parseInt(it.dataset.id);
+      input.value = it.textContent;
+      dd.innerHTML = ''; dd.classList.remove('open');
+    });
+  }, 50);
+  m.actions.appendChild(UI.btn('Create', 'btn-primary', async () => {
+    if (!state.id) { UI.showError('Select an item first'); return; }
+    const qty = _bulkNum(document.getElementById('bq-qty').value);
+    if (!qty) { UI.showError('Target quantity is required'); return; }
+    try {
+      const res = await API.post('/commerce/registers', {
+        item_id: state.id,
+        target_quantity: qty,
+        unit: document.getElementById('bq-unit').value || undefined,
+        target_price: _bulkNum(document.getElementById('bq-price').value),
+        currency: document.getElementById('bq-cur').value,
+        region: document.getElementById('bq-region').value || undefined,
+        sourcing_mode: document.getElementById('bq-mode').value,
+        title: document.getElementById('bq-title').value || undefined,
+        notes: document.getElementById('bq-notes').value || undefined,
+      });
+      m.close();
+      UI.showSuccess('Register created');
+      Router.navigate(`#bulking/${res.id}`);
+    } catch (e) { UI.showError(e.message); }
+  }));
+  m.actions.appendChild(UI.btn('Cancel', 'btn-outline', () => m.close()));
+};
+
+Pages.bulkSetRegStatus = async (id, status) => {
+  try {
+    await API.patch(`/commerce/registers/${id}/status`, { status });
+    UI.showSuccess('Status updated');
+    _bulkRefresh();
+  } catch (e) { UI.showError(e.message); }
+};
+
+Pages.bulkAddContact = (id) => {
+  const m = UI.modal('Add Contact', `
+    <div class="form-group"><label>Name *</label><input id="bc-name" class="fi"></div>
+    <div class="form-group"><label>Type</label><select id="bc-type" class="fi">
+      <option value="farmer">Farmer</option><option value="cooperative">Cooperative</option>
+      <option value="aggregator">Aggregator</option><option value="trader">Trader</option></select></div>
+    <div class="form-row">
+      <div class="form-group"><label>Phone</label><input id="bc-phone" class="fi"></div>
+      <div class="form-group"><label>Email</label><input id="bc-email" class="fi"></div>
+    </div>
+    <div class="form-group"><label>Location</label><input id="bc-loc" class="fi"></div>
+    <div class="form-group"><label><input type="checkbox" id="bc-primary" style="width:auto"> Primary contact</label></div>
+    <div class="form-group"><label>Notes</label><textarea id="bc-notes" class="fi" rows="2"></textarea></div>
+  `);
+  m.actions.appendChild(UI.btn('Add', 'btn-primary', async () => {
+    const name = document.getElementById('bc-name').value.trim();
+    if (!name) { UI.showError('Name is required'); return; }
+    try {
+      await API.post(`/commerce/registers/${id}/contacts`, {
+        name,
+        contact_type: document.getElementById('bc-type').value,
+        phone: document.getElementById('bc-phone').value || undefined,
+        email: document.getElementById('bc-email').value || undefined,
+        location: document.getElementById('bc-loc').value || undefined,
+        is_primary: document.getElementById('bc-primary').checked,
+        notes: document.getElementById('bc-notes').value || undefined,
+      });
+      m.close();
+      UI.showSuccess('Contact added');
+      _bulkRefresh();
+    } catch (e) { UI.showError(e.message); }
+  }));
+  m.actions.appendChild(UI.btn('Cancel', 'btn-outline', () => m.close()));
+};
+
+Pages.bulkAddBid = (id) => {
+  const m = UI.modal('Add Bid', `
+    <div class="form-row">
+      <div class="form-group"><label>Quantity *</label><input id="bb-qty" type="number" step="any" class="fi"></div>
+      <div class="form-group"><label>Unit</label><input id="bb-unit" class="fi" placeholder="kg, MT..."></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Unit Price *</label><input id="bb-price" type="number" step="any" class="fi"></div>
+      <div class="form-group"><label>Currency</label><select id="bb-cur" class="fi">${_bulkCurrencies()}</select></div>
+    </div>
+    <div class="form-group"><label>Quality Grade</label><input id="bb-grade" class="fi" placeholder="A, B, Premium..."></div>
+    <div class="form-group"><label>Notes</label><textarea id="bb-notes" class="fi" rows="2"></textarea></div>
+  `);
+  m.actions.appendChild(UI.btn('Submit', 'btn-primary', async () => {
+    const qty = _bulkNum(document.getElementById('bb-qty').value);
+    const price = _bulkNum(document.getElementById('bb-price').value);
+    if (!qty || !price) { UI.showError('Quantity and unit price are required'); return; }
+    try {
+      await API.post(`/commerce/registers/${id}/bids`, {
+        quantity: qty,
+        unit_price: price,
+        unit: document.getElementById('bb-unit').value || undefined,
+        currency: document.getElementById('bb-cur').value,
+        quality_grade: document.getElementById('bb-grade').value || undefined,
+        notes: document.getElementById('bb-notes').value || undefined,
+      });
+      m.close();
+      UI.showSuccess('Bid submitted');
+      _bulkRefresh();
+    } catch (e) { UI.showError(e.message); }
+  }));
+  m.actions.appendChild(UI.btn('Cancel', 'btn-outline', () => m.close()));
+};
+
+Pages.bulkAcceptBid = async (bidId) => {
+  try {
+    await API.post(`/commerce/bids/${bidId}/accept`, {});
+    UI.showSuccess('Bid accepted');
+    _bulkRefresh();
+  } catch (e) { UI.showError(e.message); }
+};
+
+Pages.bulkRejectBid = async (bidId) => {
+  try {
+    await API.post(`/commerce/bids/${bidId}/reject`, {});
+    UI.showSuccess('Bid rejected');
+    _bulkRefresh();
+  } catch (e) { UI.showError(e.message); }
+};
+
+Pages.bulkCloseDeal = (id) => {
+  const m = UI.modal('Close Deal', `
+    <div class="form-row">
+      <div class="form-group"><label>Quantity *</label><input id="bd-qty" type="number" step="any" class="fi"></div>
+      <div class="form-group"><label>Unit</label><input id="bd-unit" class="fi"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Unit Price *</label><input id="bd-price" type="number" step="any" class="fi"></div>
+      <div class="form-group"><label>Currency</label><select id="bd-cur" class="fi">${_bulkCurrencies()}</select></div>
+    </div>
+    <p style="font-size:12px;color:var(--text-light)">Tip: close a deal per accepted bid so settlements can be computed.</p>
+  `);
+  m.actions.appendChild(UI.btn('Close Deal', 'btn-primary', async () => {
+    const qty = _bulkNum(document.getElementById('bd-qty').value);
+    const price = _bulkNum(document.getElementById('bd-price').value);
+    if (!qty || !price) { UI.showError('Quantity and unit price are required'); return; }
+    try {
+      await API.post(`/commerce/registers/${id}/deals`, {
+        quantity: qty,
+        unit_price: price,
+        unit: document.getElementById('bd-unit').value || undefined,
+        currency: document.getElementById('bd-cur').value,
+      });
+      m.close();
+      UI.showSuccess('Deal closed');
+      _bulkRefresh();
+    } catch (e) { UI.showError(e.message); }
+  }));
+  m.actions.appendChild(UI.btn('Cancel', 'btn-outline', () => m.close()));
+};
+
+Pages.bulkExchangeCreds = async (dealId) => {
+  try {
+    const res = await API.post(`/commerce/deals/${dealId}/exchange-credentials`, {});
+    const creds = res.buyer || res.seller ? `<p style="font-size:13px;color:var(--text-light)">Buyer and seller credentials exchanged for the deal.</p>` : '';
+    const m = UI.modal('Credentials Exchanged', creds + `<pre style="background:var(--bg);padding:12px;border-radius:var(--radius);font-size:12px;overflow:auto;max-height:300px">${JSON.stringify(res, null, 2)}</pre>`);
+    m.actions.appendChild(UI.btn('Done', 'btn-primary', () => { m.close(); _bulkRefresh(); }));
+  } catch (e) { UI.showError(e.message); }
+};
+
+Pages.bulkCalcSettlements = async (id) => {
+  try {
+    await API.post(`/commerce/registers/${id}/settlements/calculate`, {});
+    UI.showSuccess('Settlements calculated');
+    _bulkRefresh();
+  } catch (e) { UI.showError(e.message); }
+};
+
+Pages.bulkMarkPaid = async (settlementId) => {
+  try {
+    await API.patch(`/commerce/settlements/${settlementId}/mark-paid`, {});
+    UI.showSuccess('Settlement marked paid');
+    _bulkRefresh();
+  } catch (e) { UI.showError(e.message); }
+};
+
+Pages.bulkInitiatePayment = (id) => {
+  const m = UI.modal('Initiate Payment', `
+    <div class="form-row">
+      <div class="form-group"><label>Amount *</label><input id="bp-amount" type="number" step="any" class="fi"></div>
+      <div class="form-group"><label>Currency</label><select id="bp-cur" class="fi">${_bulkCurrencies()}</select></div>
+    </div>
+    <div class="form-group"><label>Method</label><select id="bp-method" class="fi">
+      <option value="bank_transfer">Bank Transfer</option><option value="mpesa">M-Pesa</option>
+      <option value="airtel_money">Airtel Money</option><option value="mtn_momo">MTN MoMo</option>
+      <option value="visa">Visa</option><option value="mastercard">Mastercard</option>
+      <option value="stripe">Stripe</option><option value="cash">Cash</option></select></div>
+    <div class="form-group"><label>Provider Reference</label><input id="bp-ref" class="fi"></div>
+  `);
+  m.actions.appendChild(UI.btn('Initiate', 'btn-primary', async () => {
+    const amount = _bulkNum(document.getElementById('bp-amount').value);
+    if (!amount) { UI.showError('Amount is required'); return; }
+    try {
+      await API.post('/commerce/payments', {
+        amount,
+        currency: document.getElementById('bp-cur').value,
+        method: document.getElementById('bp-method').value,
+        register_id: id,
+        provider_reference: document.getElementById('bp-ref').value || undefined,
+      });
+      m.close();
+      UI.showSuccess('Payment initiated');
+      _bulkRefresh();
+    } catch (e) { UI.showError(e.message); }
+  }));
+  m.actions.appendChild(UI.btn('Cancel', 'btn-outline', () => m.close()));
+};
+
+Pages.bulkConfirmPayment = async (paymentId) => {
+  try {
+    await API.post(`/commerce/payments/${paymentId}/confirm`, {});
+    UI.showSuccess('Payment confirmed');
+    _bulkRefresh();
+  } catch (e) { UI.showError(e.message); }
+};
+
+Pages.bulkBookWarehouse = (id) => {
+  const m = UI.modal('Book Warehouse', `
+    <div class="form-group"><label>Warehouse *</label><select id="bw-warehouse" class="fi"><option value="">Loading...</option></select></div>
+    <div class="form-row">
+      <div class="form-group"><label>Start Date</label><input id="bw-start" type="date" class="fi"></div>
+      <div class="form-group"><label>End Date</label><input id="bw-end" type="date" class="fi"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Quantity</label><input id="bw-qty" type="number" step="any" class="fi"></div>
+      <div class="form-group"><label>Unit</label><input id="bw-unit" class="fi"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Storage Cost</label><input id="bw-cost" type="number" step="any" class="fi"></div>
+      <div class="form-group"><label>Currency</label><select id="bw-cur" class="fi">${_bulkCurrencies()}</select></div>
+    </div>
+  `);
+  API.get('/warehouses').then(d => {
+    const sel = document.getElementById('bw-warehouse');
+    if (sel) sel.innerHTML = (d.warehouses || []).map(w => `<option value="${w.id}">${w.name} (${w.code})</option>`).join('');
+  }).catch(() => {});
+  m.actions.appendChild(UI.btn('Book', 'btn-primary', async () => {
+    const whId = parseInt(document.getElementById('bw-warehouse').value);
+    if (!whId) { UI.showError('Select a warehouse'); return; }
+    try {
+      await API.post(`/commerce/registers/${id}/warehouse-bookings`, {
+        warehouse_id: whId,
+        start_date: document.getElementById('bw-start').value || undefined,
+        end_date: document.getElementById('bw-end').value || undefined,
+        quantity: _bulkNum(document.getElementById('bw-qty').value),
+        unit: document.getElementById('bw-unit').value || undefined,
+        storage_cost: _bulkNum(document.getElementById('bw-cost').value),
+        currency: document.getElementById('bw-cur').value,
+      });
+      m.close();
+      UI.showSuccess('Warehouse booked');
+      _bulkRefresh();
+    } catch (e) { UI.showError(e.message); }
+  }));
+  m.actions.appendChild(UI.btn('Cancel', 'btn-outline', () => m.close()));
+};
+
+Pages.bulkPostCourier = (id) => {
+  const m = UI.modal('Post Courier Job', `
+    <div class="form-group"><label>Pickup Location *</label><input id="bj-pickup" class="fi"></div>
+    <div class="form-group"><label>Warehouse Dropoff</label><select id="bj-wh" class="fi"><option value="">Any</option></select></div>
+    <div class="form-row">
+      <div class="form-group"><label>Quantity</label><input id="bj-qty" type="number" step="any" class="fi"></div>
+      <div class="form-group"><label>Unit</label><input id="bj-unit" class="fi"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Weight (kg)</label><input id="bj-weight" type="number" step="any" class="fi"></div>
+      <div class="form-group"><label>Budget</label><input id="bj-budget" type="number" step="any" class="fi"></div>
+    </div>
+    <div class="form-group"><label>Courier Name</label><input id="bj-name" class="fi"></div>
+  `);
+  API.get('/warehouses').then(d => {
+    const sel = document.getElementById('bj-wh');
+    if (sel) sel.innerHTML = '<option value="">Any</option>' + (d.warehouses || []).map(w => `<option value="${w.id}">${w.name}</option>`).join('');
+  }).catch(() => {});
+  m.actions.appendChild(UI.btn('Post', 'btn-primary', async () => {
+    const pickup = document.getElementById('bj-pickup').value.trim();
+    if (!pickup) { UI.showError('Pickup location is required'); return; }
+    try {
+      await API.post(`/commerce/registers/${id}/courier-jobs`, {
+        pickup_location: pickup,
+        dropoff_warehouse_id: parseInt(document.getElementById('bj-wh').value) || undefined,
+        quantity: _bulkNum(document.getElementById('bj-qty').value),
+        unit: document.getElementById('bj-unit').value || undefined,
+        weight_kg: _bulkNum(document.getElementById('bj-weight').value),
+        budget: _bulkNum(document.getElementById('bj-budget').value),
+        courier_name: document.getElementById('bj-name').value || undefined,
+      });
+      m.close();
+      UI.showSuccess('Courier job posted');
+      _bulkRefresh();
+    } catch (e) { UI.showError(e.message); }
+  }));
+  m.actions.appendChild(UI.btn('Cancel', 'btn-outline', () => m.close()));
+};
+
+Pages.bulkAssignJob = (id) => {
+  const m = UI.modal('Assign Job', `
+    <div class="form-group"><label>Role</label><select id="bj-role" class="fi">
+      <option value="clerk">Clerk</option><option value="verifier">Verifier</option><option value="courier">Courier</option></select></div>
+    <div class="form-group"><label>Assignee</label><select id="bj-cand" class="fi"><option value="">Loading...</option></select></div>
+    <div class="form-group"><label>Location</label><input id="bj-loc" class="fi"></div>
+    <div class="form-group"><label>Notes</label><textarea id="bj-notes" class="fi" rows="2"></textarea></div>
+  `);
+  API.get(`/commerce/registers/${id}/job-candidates`).then(d => {
+    const sel = document.getElementById('bj-cand');
+    if (sel) sel.innerHTML = (d.candidates || []).map(u => `<option value="${u.id}">${u.name}${u.location ? ' — ' + u.location : ''}${u.role ? ' (' + u.role + ')' : ''}</option>`).join('') || '<option value="">No candidates found</option>';
+  }).catch(() => {});
+  m.actions.appendChild(UI.btn('Assign', 'btn-primary', async () => {
+    const cand = parseInt(document.getElementById('bj-cand').value);
+    if (!cand) { UI.showError('Select an assignee'); return; }
+    try {
+      await API.post(`/commerce/registers/${id}/job-assignments`, {
+        role: document.getElementById('bj-role').value,
+        assignee_id: cand,
+        assignee_location: document.getElementById('bj-loc').value || undefined,
+        notes: document.getElementById('bj-notes').value || undefined,
+      });
+      m.close();
+      UI.showSuccess('Job assigned');
+      _bulkRefresh();
+    } catch (e) { UI.showError(e.message); }
+  }));
+  m.actions.appendChild(UI.btn('Cancel', 'btn-outline', () => m.close()));
+};
+
+Pages.bulkSetJobStatus = async (jobId, status) => {
+  try {
+    await API.patch(`/commerce/job-assignments/${jobId}/status`, { status });
+    UI.showSuccess('Job updated');
+    _bulkRefresh();
+  } catch (e) { UI.showError(e.message); }
+};
+
+Pages.bulkIssueCert = (itemId) => {
+  const m = UI.modal('Issue Certificate', `
+    <div class="form-group"><label>Type</label><select id="bcer-type" class="fi">
+      <option value="origin">Origin</option><option value="organic">Organic</option><option value="halal">Halal</option>
+      <option value="quality">Quality</option><option value="safety">Safety</option><option value="fair_trade">Fair Trade</option>
+      <option value="globalgap">GlobalG.A.P.</option><option value="grasp">GRASP</option><option value="smeta">SMETA</option>
+      <option value="brc">BRC</option><option value="ifs">IFS</option><option value="fssc22000">FSSC 22000</option>
+      <option value="iso22000">ISO 22000</option><option value="custom">Custom</option></select></div>
+    <div class="form-group"><label>Issuing Body</label><input id="bcer-body" class="fi"></div>
+    <div class="form-group"><label>Recipient</label><input id="bcer-recipient" class="fi"></div>
+    <div class="form-group"><label>Expiry Date</label><input id="bcer-exp" type="date" class="fi"></div>
+    <div class="form-group"><label>Description</label><textarea id="bcer-desc" class="fi" rows="2"></textarea></div>
+  `);
+  m.actions.appendChild(UI.btn('Issue', 'btn-primary', async () => {
+    try {
+      await API.post('/certificates', {
+        item_id: itemId,
+        type: document.getElementById('bcer-type').value,
+        issuing_body: document.getElementById('bcer-body').value || undefined,
+        recipient_entity: document.getElementById('bcer-recipient').value || undefined,
+        expiry_date: document.getElementById('bcer-exp').value || undefined,
+        description: document.getElementById('bcer-desc').value || undefined,
+      });
+      m.close();
+      UI.showSuccess('Certificate issued');
+      _bulkRefresh();
+    } catch (e) { UI.showError(e.message); }
+  }));
+  m.actions.appendChild(UI.btn('Cancel', 'btn-outline', () => m.close()));
+};
+
+Pages.bulkCreatePacking = (id, itemId) => {
+  const m = UI.modal('Create Packing Record', `
+    <div class="form-row">
+      <div class="form-group"><label>Quantity *</label><input id="bpk-qty" type="number" step="any" class="fi"></div>
+      <div class="form-group"><label>Unit</label><input id="bpk-unit" class="fi"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Package Type</label><input id="bpk-type" class="fi" placeholder="carton, jute bag..."></div>
+      <div class="form-group"><label>Package Count</label><input id="bpk-count" type="number" class="fi"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Total Weight (kg)</label><input id="bpk-weight" type="number" step="any" class="fi"></div>
+      <div class="form-group"><label>Certificate</label><select id="bpk-cert" class="fi"><option value="">— None —</option></select></div>
+    </div>
+    <div class="form-group"><label>Notes</label><textarea id="bpk-notes" class="fi" rows="2"></textarea></div>
+  `);
+  API.get(`/certificates/by-item/${itemId}`).then(d => {
+    const sel = document.getElementById('bpk-cert');
+    if (sel) sel.innerHTML = '<option value="">— None —</option>' + (d.certificates || []).map(c => `<option value="${c.certificate_id}">${c.certificate_id} (${c.type})</option>`).join('');
+  }).catch(() => {});
+  m.actions.appendChild(UI.btn('Create', 'btn-primary', async () => {
+    const qty = _bulkNum(document.getElementById('bpk-qty').value);
+    if (!qty) { UI.showError('Quantity is required'); return; }
+    try {
+      await API.post(`/commerce/registers/${id}/packing-records`, {
+        quantity: qty,
+        unit: document.getElementById('bpk-unit').value || undefined,
+        package_type: document.getElementById('bpk-type').value || undefined,
+        package_count: _bulkNum(document.getElementById('bpk-count').value),
+        total_weight_kg: _bulkNum(document.getElementById('bpk-weight').value),
+        certificate_id: document.getElementById('bpk-cert').value || undefined,
+        notes: document.getElementById('bpk-notes').value || undefined,
+      });
+      m.close();
+      UI.showSuccess('Packing record created');
+      _bulkRefresh();
+    } catch (e) { UI.showError(e.message); }
+  }));
+  m.actions.appendChild(UI.btn('Cancel', 'btn-outline', () => m.close()));
+};
+
+Pages.bulkCertifyPacking = (packingId, itemId, currentCert) => {
+  const m = UI.modal('Certify Packing Record', `
+    <p style="font-size:13px;color:var(--text-light);margin-bottom:8px">Linking a certificate finalizes the packing record.</p>
+    <div class="form-group"><label>Certificate</label><select id="bpc-cert" class="fi"><option value="">— None —</option></select></div>
+  `);
+  API.get(`/certificates/by-item/${itemId}`).then(d => {
+    const sel = document.getElementById('bpc-cert');
+    if (sel) {
+      sel.innerHTML = '<option value="">— None —</option>' + (d.certificates || []).map(c => `<option value="${c.certificate_id}" ${c.certificate_id === currentCert ? 'selected' : ''}>${c.certificate_id} (${c.type})</option>`).join('');
+      sel.value = currentCert || '';
+    }
+  }).catch(() => {});
+  m.actions.appendChild(UI.btn('Certify', 'btn-success', async () => {
+    const certId = document.getElementById('bpc-cert').value;
+    if (!certId) { UI.showError('Select a certificate to certify this record'); return; }
+    try {
+      await API.patch(`/commerce/packing-records/${packingId}/status`, { status: 'certified', certificate_id: certId });
+      m.close();
+      UI.showSuccess('Packing record certified');
+      _bulkRefresh();
+    } catch (e) { UI.showError(e.message); }
+  }));
+  m.actions.appendChild(UI.btn('Cancel', 'btn-outline', () => m.close()));
+};
+
+Pages.bulkCancelPacking = async (packingId) => {
+  try {
+    await API.patch(`/commerce/packing-records/${packingId}/status`, { status: 'cancelled' });
+    UI.showSuccess('Packing record cancelled');
+    _bulkRefresh();
+  } catch (e) { UI.showError(e.message); }
+};
+
 // ─── ENHANCED TAXONOMY ITEM DETAIL ─────────────────────────────
 
 Pages.taxonomyItemDetail = (app, id) => {

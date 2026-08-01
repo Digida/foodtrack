@@ -239,7 +239,7 @@ const UI = {
       UI.el('a', { href: '#home', className: 'pub-logo' }, 'Food', UI.el('span', {}, 'Track')),
       UI.el('div', { className: 'pub-links' },
         UI.el('a', { href: '#home', className: 'pub-link ' + isActive('#home') }, 'Home'),
-        UI.el('a', { href: '#search', className: 'pub-link ' + (curHash.startsWith('#search') ? 'active' : '') }, 'Search'),
+        UI.el('a', { href: '#bulking', className: 'pub-link ' + (curHash.startsWith('#bulking') ? 'active' : '') }, 'Bulking'),
         UI.el('a', { href: '#food-items', className: 'pub-link ' + (curHash.startsWith('#food-items') || curHash.startsWith('#food-item') ? 'active' : '') }, 'Food Items'),
         ...(loggedIn ? [
           UI.el('a', { href: '#verify', className: 'pub-link ' + isActive('#verify') }, 'Verify'),
@@ -275,6 +275,7 @@ const UI = {
     const loggedIn = Auth.isLoggedIn();
     const nav = [
       { icon: '\u{1F4CA}', label: 'Dashboard', href: '#dashboard' },
+      { icon: '\u{1F69B}', label: 'Bulking', href: '#bulking' },
       { icon: '\u{1F50D}', label: 'Search', href: '#search' },
       { icon: '\u{1F33E}', label: 'Food Items', href: '#food-items' },
       { icon: '\u{1F4E6}', label: 'Products', href: '#products' },
