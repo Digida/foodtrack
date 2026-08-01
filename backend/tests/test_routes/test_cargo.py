@@ -6,8 +6,8 @@ from httpx import AsyncClient
 
 @pytest.mark.asyncio
 async def test_register_cargo_endpoint(client: AsyncClient, taxonomy_item):
-    """POST /cargo/register should register new cargo."""
-    response = await client.post("/cargo/register", json={
+    """POST /api/v1/cargo/register should register new cargo."""
+    response = await client.post("/api/v1/cargo/register", json={
         "item_id": taxonomy_item.id,
         "quantity": 1000,
         "unit": "kg",
@@ -24,13 +24,13 @@ async def test_register_cargo_endpoint(client: AsyncClient, taxonomy_item):
 
 @pytest.mark.asyncio
 async def test_get_cargo_detail_endpoint(client: AsyncClient, taxonomy_item):
-    """GET /cargo/{id} should return cargo detail."""
-    reg = await client.post("/cargo/register", json={
+    """GET /api/v1/cargo/{id} should return cargo detail."""
+    reg = await client.post("/api/v1/cargo/register", json={
         "item_id": taxonomy_item.id, "quantity": 500,
     })
     cargo_id = reg.json()["id"]
 
-    response = await client.get(f"/cargo/{cargo_id}")
+    response = await client.get(f"/api/v1/cargo/{cargo_id}")
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == cargo_id
@@ -39,12 +39,12 @@ async def test_get_cargo_detail_endpoint(client: AsyncClient, taxonomy_item):
 
 @pytest.mark.asyncio
 async def test_get_cargo_by_item_endpoint(client: AsyncClient, taxonomy_item):
-    """GET /cargo/by-item/{id} should list cargo for an item."""
-    await client.post("/cargo/register", json={
+    """GET /api/v1/cargo/by-item/{id} should list cargo for an item."""
+    await client.post("/api/v1/cargo/register", json={
         "item_id": taxonomy_item.id, "quantity": 100,
     })
 
-    response = await client.get(f"/cargo/by-item/{taxonomy_item.id}")
+    response = await client.get(f"/api/v1/cargo/by-item/{taxonomy_item.id}")
     assert response.status_code == 200
     data = response.json()
     assert "cargo" in data
@@ -53,13 +53,13 @@ async def test_get_cargo_by_item_endpoint(client: AsyncClient, taxonomy_item):
 
 @pytest.mark.asyncio
 async def test_update_cargo_status_endpoint(client: AsyncClient, taxonomy_item):
-    """PATCH /cargo/{id}/status should transition cargo status."""
-    reg = await client.post("/cargo/register", json={
+    """PATCH /api/v1/cargo/{id}/status should transition cargo status."""
+    reg = await client.post("/api/v1/cargo/register", json={
         "item_id": taxonomy_item.id, "quantity": 200,
     })
     cargo_id = reg.json()["id"]
 
-    response = await client.patch(f"/cargo/{cargo_id}/status", json={
+    response = await client.patch(f"/api/v1/cargo/{cargo_id}/status", json={
         "status": "registered",
     })
     assert response.status_code == 200
@@ -68,13 +68,13 @@ async def test_update_cargo_status_endpoint(client: AsyncClient, taxonomy_item):
 
 @pytest.mark.asyncio
 async def test_cargo_certification_status_endpoint(client: AsyncClient, taxonomy_item):
-    """GET /cargo/{id}/certification-status should return cert health."""
-    reg = await client.post("/cargo/register", json={
+    """GET /api/v1/cargo/{id}/certification-status should return cert health."""
+    reg = await client.post("/api/v1/cargo/register", json={
         "item_id": taxonomy_item.id, "quantity": 300,
     })
     cargo_id = reg.json()["id"]
 
-    response = await client.get(f"/cargo/{cargo_id}/certification-status")
+    response = await client.get(f"/api/v1/cargo/{cargo_id}/certification-status")
     assert response.status_code == 200
     data = response.json()
     assert "certification_health" in data

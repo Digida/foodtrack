@@ -165,6 +165,7 @@ async def api_list_shipments(
     page: int = Query(1, ge=1),
     status: str | None = None,
     mode: str | None = None,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await list_shipments(db, page, status, mode)
@@ -173,6 +174,7 @@ async def api_list_shipments(
 @router.get("/{shipment_id}")
 async def api_get_shipment(
     shipment_id: int,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     s = await get_shipment(db, shipment_id)

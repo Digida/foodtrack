@@ -24,6 +24,13 @@ from app.models.esg import ItemCarbonFootprint
 from app.models.recall import Recall, RecallEvent, RecallSeverity, RecallStatus
 from app.models.supplier import Supplier, SupplierScorecard
 from app.models.insurance import CargoPolicy, InsuranceClaim, ClaimStatus
+from app.models.commerce import (
+    Appointment, AppointmentStatus, SourcingMode, RegisterStatus, ContactType,
+    BidStatus, DealStatus, WarehouseBookingStatus, CourierJobStatus, PaymentMethod,
+    PaymentStatus, SettlementStatus,
+    BulkingRegister, BulkingContact, BulkingBid, WarehouseBooking, CourierJob,
+    Deal, Payment, Settlement,
+)
 
 __all__ = [
     "Tenant",
@@ -51,4 +58,10 @@ __all__ = [
     "Recall", "RecallEvent", "RecallSeverity", "RecallStatus",
     "Supplier", "SupplierScorecard",
     "CargoPolicy", "InsuranceClaim", "ClaimStatus",
+    "Appointment", "AppointmentStatus",
+    "SourcingMode", "RegisterStatus", "ContactType", "BidStatus", "DealStatus",
+    "WarehouseBookingStatus", "CourierJobStatus", "PaymentMethod", "PaymentStatus",
+    "SettlementStatus",
+    "BulkingRegister", "BulkingContact", "BulkingBid", "WarehouseBooking",
+    "CourierJob", "Deal", "Payment", "Settlement",
 ]

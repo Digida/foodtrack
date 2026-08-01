@@ -28,7 +28,7 @@ async def test_get_metrics(db: AsyncSession):
 async def test_get_metrics_contains_keys(db: AsyncSession):
     """Should contain SLA-relevant metric keys."""
     result = await get_metrics(db)
-    expected_keys = {"timestamp", "tables", "pending_certificates", "unacknowledged_alerts", "active_recalls"}
+    expected_keys = {"timestamp", "tables", "expiring_certificates", "unacknowledged_alerts", "active_recalls"}
     assert expected_keys.issubset(result.keys())
 
 

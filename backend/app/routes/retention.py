@@ -24,8 +24,8 @@ async def api_create_policy(
     try:
         policy = await create_archive_policy(db, user, req.entity_type, req.retention_days)
         return {"id": policy.id, "entity_type": policy.entity_type, "retention_days": policy.retention_days}
-    except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+    except (ValueError, PermissionError) as e:
+        raise HTTPException(status_code=400 if isinstance(e, ValueError) else 403, detail=str(e))
 
 
 @router.get("/policies")

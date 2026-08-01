@@ -3,8 +3,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
 from app.database import get_db
+from app.models.user import User
 from app.services.share_service import generate_share_links, get_peer_comparison
 from app.services.product_service import get_product_detail, get_product_by_sku
+from app.utils.dependencies import get_current_user
 
 router = APIRouter(prefix="/share", tags=["share"])
 
@@ -15,6 +17,7 @@ class ShareRequest(BaseModel):
 
 @router.post("/generate-link")
 async def api_generate_share_link(req: ShareRequest,
+                                   user: User = Depends(get_current_user),
                                    db: AsyncSession = Depends(get_db)):
     product = await get_product_detail(db, req.product_id)
     if not product:

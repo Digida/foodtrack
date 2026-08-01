@@ -21,7 +21,7 @@ async def _setup(db: AsyncSession):
     # Create a minimal batch so the FK exists
     from app.models.product import Product
     from app.models.taxonomy import TaxonomyItem, TaxonomyNode, Taxonomy
-    from app.models.traceability import Batch
+    from app.models.tracking import Batch
 
     taxonomy = Taxonomy(name="Test Tax")
     db.add(taxonomy)
@@ -31,10 +31,10 @@ async def _setup(db: AsyncSession):
     await db.commit()
     item = TaxonomyItem(node_id=node.id, code="ITEM1", common_name="Apple")
     db.add(item)
-    product = Product(sku="SKU-001", name="Apple Product", item_id=item.id)
+    product = Product(sku="SKU-001", name="Apple Product", item_id=item.id, producer_id=user.id)
     db.add(product)
     await db.commit()
-    batch = Batch(product_id=product.id, batch_code="BATCH-001", quantity=100, unit="kg", created_by=user.id)
+    batch = Batch(batch_number="BATCH-001", product_id=product.id, quantity=100, created_by=user.id)
     db.add(batch)
     await db.commit()
     await db.refresh(batch)

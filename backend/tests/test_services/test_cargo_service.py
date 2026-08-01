@@ -102,7 +102,8 @@ async def test_get_cargo_certification_status(db: AsyncSession, admin_user, taxo
 
     # Create a valid certificate for the item
     product = Product(sku="TEST-CARGO-SKU", name="Cargo Test Product",
-                      category=ProductCategory.FRESH_PRODUCE, item_id=taxonomy_item.id)
+                      category=ProductCategory.FRESH_PRODUCE, item_id=taxonomy_item.id,
+                      producer_id=admin_user.id)
     db.add(product); await db.commit(); await db.refresh(product)
 
     cert = Certificate(

@@ -306,7 +306,7 @@ const UI = {
         )
       ),
       UI.el('div', { className: 'sidebar-footer' },
-        UI.el('div', { className: 'sidebar-user' }, loggedIn ? (user?.name || '') : 'Guest'),
+        UI.el('div', { className: 'sidebar-user' }, loggedIn ? (user?.full_name || user?.name || '') : 'Guest'),
         loggedIn
           ? UI.btn('Logout', 'btn-outline btn-sm', () => Auth.logout())
           : UI.btn('Login', 'btn-primary btn-sm', () => Router.navigate('#login'))

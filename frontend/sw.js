@@ -1,10 +1,12 @@
-const CACHE = 'foodtrack-v2';
+const CACHE = 'foodtrack-v3';
 const PRECACHE = [
   '/',
   '/index.html',
+  '/login.html',
   '/css/app.css',
   '/js/api.js',
   '/js/auth.js',
+  '/js/seo.js',
   '/js/router.js',
   '/js/components.js',
   '/js/pages.js',

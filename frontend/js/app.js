@@ -105,7 +105,7 @@
   Router.add('home', Pages.home);
   Router.add('about', Pages.about);
   Router.add('contact', Pages.contact);
-  Router.add('verify', checkAuth(Pages.verify));
+  Router.add('verify', Pages.verify);
   Router.add('login', Pages.login);
   Router.add('mfa-verify', Pages.mfaVerify);
   Router.add('search', Pages.search);

@@ -54,6 +54,7 @@ async def get_collection(db: AsyncSession, collection_id: int):
         items_list.append({
             "id": ti.id, "code": ti.code, "common_name": ti.common_name,
             "scientific_name": ti.scientific_name,
+            "phylum": ti.phylum, "family": ti.family,
             "image_url": ti.image_url, "sort_order": ci.sort_order,
         })
     return {

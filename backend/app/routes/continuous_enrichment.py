@@ -92,6 +92,7 @@ async def api_backfill(
 
 @router.post("/schedule-refresh")
 async def api_schedule_refresh(
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await refresh_collections_schedule(db)
@@ -101,6 +102,7 @@ async def api_schedule_refresh(
 async def api_list_logs(
     page: int = Query(1, ge=1),
     source: str | None = Query(None),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await list_enrichment_logs(db, page, source)
@@ -110,6 +112,7 @@ async def api_list_logs(
 async def api_list_suggestions(
     page: int = Query(1, ge=1),
     status: str | None = Query(None),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await list_enrichment_suggestions(db, page, status)

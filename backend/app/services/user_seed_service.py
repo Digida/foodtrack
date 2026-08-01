@@ -1,6 +1,8 @@
 """Idempotent, incremental seed of platform accounts (tenant, superuser, admin)."""
 
 import logging
+import os
+import secrets
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +13,11 @@ from app.services.auth_service import hash_password
 
 logger = logging.getLogger("app.startup")
 
-DEFAULT_PASSWORD = "FoodTrack@2026"
+# Password for seeded accounts comes from the environment. If unset, a
+# one-time random secret is generated so accounts can never be logged into
+# with a known default. Operators must set SEED_ADMIN_PASSWORD before seeding
+# and distribute it out-of-band.
+DEFAULT_PASSWORD = os.getenv("SEED_ADMIN_PASSWORD") or secrets.token_urlsafe(24)
 
 DEMO_ACCOUNTS = [
     {
@@ -83,7 +89,7 @@ async def seed_default_users(db: AsyncSession) -> dict:
             "msg": "Seeded demo account",
             "email": account["email"],
             "role": account["role"].value,
-            "password": DEFAULT_PASSWORD,
+            "password_configured": bool(os.getenv("SEED_ADMIN_PASSWORD")),
         })
 
     await db.commit()

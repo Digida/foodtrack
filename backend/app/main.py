@@ -77,6 +77,7 @@ from app.routes import (
     codes, health, cargo, verify, compliance, rates, enrichment, continuous_enrichment,
     events, telemetry, developer_portal, gov_integration, arabic_i18n,
     recalls, suppliers, insurance, monitoring, retention, tiers, esg, startup,
+    commerce,
 )
 
 # OpenTelemetry tracing — enabled only when opentelemetry packages are installed
@@ -224,6 +225,10 @@ async def accept_language_middleware(request: Request, call_next):
     request.state.language = lang
     return await call_next(request)
 
+# X-API-Key authentication + per-key rate limiting (Developer Portal keys).
+from app.middleware.api_key_middleware import api_key_middleware
+app.middleware("http")(api_key_middleware)
+
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(products.router, prefix="/api/v1")
 app.include_router(traceability.router, prefix="/api/v1")
@@ -242,7 +247,7 @@ app.include_router(item_movements.router, prefix="/api/v1")
 app.include_router(cargo.router, prefix="/api/v1")
 app.include_router(codes.router)
 app.include_router(health.router)
-app.include_router(verify.router)
+app.include_router(verify.router, prefix="/api/v1")
 app.include_router(compliance.router, prefix="/api/v1")
 app.include_router(rates.router, prefix="/api/v1")
 app.include_router(enrichment.router, prefix="/api/v1")
@@ -260,6 +265,7 @@ app.include_router(tiers.router, prefix="/api/v1")
 app.include_router(esg.router, prefix="/api/v1")
 app.include_router(monitoring.router)
 app.include_router(startup.router, prefix="/api/v1")
+app.include_router(commerce.router, prefix="/api/v1")
 
 from pathlib import Path as _Path
 _FRONTEND_DIR = _Path(__file__).resolve().parent.parent.parent / "frontend"

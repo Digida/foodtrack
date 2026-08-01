@@ -28,7 +28,11 @@ async def test_me_includes_alternate_fields(client: AsyncClient):
 
 # ── email verification endpoint flow ──────────────────────────────────────────
 
-async def test_email_otp_and_verify_endpoints(client: AsyncClient):
+async def test_email_otp_and_verify_endpoints(client: AsyncClient, monkeypatch):
+    # dev_code is only echoed when RETURN_OTP_IN_DEV is enabled (default off)
+    from app.services import auth_service
+    monkeypatch.setattr(auth_service.settings, "RETURN_OTP_IN_DEV", True)
+
     resp = await client.post("/api/v1/auth/email-otp")
     assert resp.status_code == 200
     dev_code = resp.json().get("dev_code")
@@ -37,6 +41,12 @@ async def test_email_otp_and_verify_endpoints(client: AsyncClient):
     verify = await client.post("/api/v1/auth/verify-email", json={"code": dev_code})
     assert verify.status_code == 200
     assert verify.json()["email_verified"] is True
+
+
+async def test_email_otp_does_not_echo_code_by_default(client: AsyncClient):
+    resp = await client.post("/api/v1/auth/email-otp")
+    assert resp.status_code == 200
+    assert "dev_code" not in resp.json()
 
 
 async def test_verify_email_wrong_code(client: AsyncClient):

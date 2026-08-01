@@ -15,8 +15,9 @@ from app.services.auth_service import decode_access_token, hash_password
 bearer_scheme = HTTPBearer(auto_error=False)
 
 # System user used to attribute anonymous (unregistered) actions. It can never
-# log in (random password) but passes role checks so unregistered users can use
-# every feature that is not explicitly login-gated.
+# log in (random password). It carries a restricted role so anonymous requests
+# cannot pass ADMIN/ENTERPRISE role checks in the service layer — anonymous
+# actions that require real privileges must be explicitly login-gated instead.
 SYSTEM_USER_EMAIL = "system@foodtrack.local"
 
 
@@ -29,7 +30,7 @@ async def get_system_user(db: AsyncSession) -> User:
         email=SYSTEM_USER_EMAIL,
         full_name="FoodTrack System",
         company="FoodTrack",
-        role=UserRole.ADMIN,
+        role=UserRole.VIEWER,
         hashed_password=hash_password(uuid.uuid4().hex),
     )
     db.add(user)

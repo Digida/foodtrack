@@ -1246,3 +1246,223 @@ Fixed across:
 - `users.updated_at` gains `server_default = now()`
 - `users.mfa_otp_token` new `Text` nullable column
 - Indexes: `ix_certificates_expiry_date`, `ix_telemetry_alerts_acknowledged`, `ix_recalls_status`, `ix_supplier_scorecards_supplier_score`, `ix_supplier_scorecards_overall_score`, `ix_insurance_claims_status`
+
+---
+
+# Phase 2 Audit (2026-08-01) — Fresh Findings, Missed Implementations & Completion Roadmap
+
+> Second full source-read audit of `backend/app/`, `backend/tests/`, `frontend/`, `.github/workflows/ci.yml` and the Alembic migration chain. The previous critique (above) was resolved; this section documents what the platform still needs to be complete and production-safe. Findings ordered by severity.
+
+## 0. Work-In-Progress Snapshot (uncommitted)
+
+A new **Commerce & Bulking Pipeline** module is mid-build and **uncommitted**:
+
+| Artifact | File | State |
+|---|---|---|
+| Models (10 tables) | `backend/app/models/commerce.py` | ✅ written, wired into `models/__init__.py` + `tenant.py` |
+| Service (1134 lines) | `backend/app/services/commerce_service.py` | ✅ written, 30+ methods |
+| Routes (30 endpoints) | `backend/app/routes/commerce.py` | ✅ written, registered in `main.py:264` |
+| Migration | `backend/alembic/versions/b1c2d3e4f5a6_add_commerce_tables.py` | ✅ written, **new migration HEAD** |
+| Monitoring table list | `monitoring_service.py:105-113` | ✅ extended |
+| Tests | — | ❌ **none** |
+| Frontend | — | ❌ **none** (no route, nav item, or page) |
+
+Also uncommitted: `database.py`/`main.py`/`models/__init__.py`/`models/tenant.py`/`monitoring_service.py` diffs that wire commerce in.
+
+**Migration chain is linear and intact** (verified): `000000000000 → 386555668c3a → 267c1a1c4a4b → 577747fbe587 → 828a82cbf5e4 → 819dbcaa07cc → b9cbf99bbd77 → 5f942318555b → 8afd56c3f9ff → 054afe0f5822 → f1e2d3c4b5a6 → a2b3c4d5e6f7 → c1d2e3f4a5b6 → d1e2f3a4b5c6 → d2e3f4a5b6c7 → a1b2c3d4e5f6 → b1c2d3e4f5a6 (head)`. `alembic upgrade head` reaches the commerce tables.
+
+---
+
+## 1. Security — CRITICAL
+
+**1.1 — Hardcoded superuser password, logged in cleartext (P0)**
+`user_seed_service.py:14` hardcodes `DEFAULT_PASSWORD = "FoodTrack@2026"`; it is bcrypt-hashed and assigned to the seeded SUPERUSER (`digikiminvest@gmail.com`) and ADMIN (`digidanlpai@gmail.com`) accounts (`:75`), then **written to the log at `:86`**. Anyone with repo access can log in as superuser on any deployed environment where seeding ran. Fix: read from `SEED_ADMIN_PASSWORD` env var (or generate a one-time secret), and remove the cleartext log line.
+
+**1.2 — Anonymous writes minted as the system ADMIN user (P0)**
+`dependencies.py:20,32` creates the `system@foodtrack.local` user with `role=UserRole.ADMIN` for any anonymous request hitting a `get_current_user_or_guest` endpoint. Unauthenticated callers therefore pass every service-layer `role in (ADMIN, ...)` check. Affects all write endpoints in: `products.py`, `traceability.py`, `certificates.py`, `collections.py`, `shipments.py`, `warehouses.py`. Fix: give the system user a restricted role (VIEWER or a dedicated SYSTEM role) and gate writes explicitly.
+
+**1.3 — `taxonomy.py` has zero authentication (P0)**
+All 10 write endpoints are public — no `get_current_user` anywhere: `taxonomy.py:165,177,189,203,215,227,250,287,301,318` (create/update/delete taxonomies, nodes, items, item names, item attributes). Anyone can alter the core catalog.
+
+**1.4 — API-key middleware is dead code (P0)**
+`middleware/api_key_middleware.py:19` defines `api_key_middleware` but it is **never imported or registered** in `main.py`. `X-API-Key` authentication and the per-key rate limiter do not function. The Developer Portal can mint keys that are never checked.
+
+**1.5 — `/verify/{code}` is login-gated (P1)**
+`routes/verify.py:12-13` requires `get_current_user`, contradicting the public-verification design (QR codes embed `/verify/{seed}` that consumers scan without an account). It is also mounted without the `/api/v1` prefix (`main.py:246`). The frontend never calls it either.
+
+**1.6 — Contact form submissions publicly readable (P1)**
+`routes/contact.py:26` `GET /contact/messages` has no auth and returns every submission (name, email, message).
+
+**1.7 — Sensitive reads still public (P1)**
+No auth on: `analytics.py` (all 8 dashboard endpoints), `inventory.py:36,43,54,65,108`, `item_movements.py` (all 10: detail/timeline/provenance/storage/movements), `shipments.py:163,173` (list + detail with carrier/tracking data), `certificates.py:51,65,86,123,132,144` (list/detail/requests/missing/verify-chain), `continuous_enrichment.py:93,100,109` (incl. **public POST `/schedule-refresh`**), `collections.py:157` (public POST feed-run), `share.py:16` (public POST generate-link).
+
+**1.8 — Commerce responses leak PII (P1)**
+`commerce_service.py:802-808` (`close_deal`) and `:842-847` (`exchange_credentials`) return buyer and seller **email addresses** in API responses.
+
+**1.9 — OTP codes not cryptographically uniform (P2)**
+`auth_service.py:153-156 / 192-193` derive 6-digit codes from `str(uuid.uuid4().int)[:6]` — leading decimal digits of a 128-bit integer are biased. Use `random.SystemRandom().randrange(10**6)`.
+
+**1.10 — `RETURN_OTP_IN_DEV` defaults to `"true"` (P1)**
+`config.py:34` — if the env var is unset, OTP codes are echoed back in API responses in production. Default must be `"false"`.
+
+**1.11 — `SECRET_KEY` guard coupled to DB type, not environment (P2)**
+`config.py:36-45` exits only when the DB is non-SQLite. A SQLite-backed production-ish deployment silently keeps `change-me`. Gate on `ENV != "development"`.
+
+---
+
+## 2. Architecture & Multi-Tenancy
+
+**2.1 — Tenant isolation is declared but almost never enforced (P0)**
+`tenant_id` columns exist on most models; user-facing services mostly query unscoped (cross-tenant data exposure):
+- `warehouse_service.py:14-18` (`list_warehouses`), `:36-37` (`get_warehouse`)
+- `shipping_service.py:18-26` (`list_shipments`), `:58-59` (`get_shipment`)
+- `batch_service.py:16-24`, `:55-56`
+- `collection_service.py:23-27`, `:43-44`
+- `insurance_service.py:51-54` (`list_policies`)
+- `supplier_service.py:42-43` (`get_supplier_detail`)
+- `product_service.py:47-61` — and `create_product` (`:27-33`) **never sets `tenant_id` at all**
+- `search_service.py`, `analytics_service.py`, `taxonomy_service.py`, `item_detail_service.py`, `rate_service.py` — no tenant scoping
+
+**Commerce is the correct pattern to replicate**: `commerce_service.py:354-357, 486-492, 495-498, 813-816, 1002-1005` scope by `buyer_id` unless admin, and child rows inherit `tenant_id` from the parent register. **Remaining commerce gaps:** `initiate_payment` (`:962-977`) never validates `register_id`/`deal_id` ownership; `mark_settlement_paid` (`:939-957`) accepts any `payment_id` without comparing tenant/register.
+
+**2.2 — Commerce correctness bugs (P1)**
+- `_register_number()` (`:106-109`) = `BR-YYYYMMDD-4randdigits` — 10k values/day, unique-indexed, **no retry on IntegrityError** → 500s under volume.
+- `submit_bid` (`:580-606`) accepts a caller-supplied `item_id` that is never checked against the register's item — bids can be attached for a different commodity.
+- No validation: `target_quantity <= 0`, negative `unit_price`/`amount`, empty `participant_name`.
+- No state machine: `accept_bid`/`reject_bid`, `update_register_status`, `update_appointment_status`, `update_warehouse_booking_status`, `update_courier_job_status` allow arbitrary transitions (e.g. CLOSED → DRAFT, accepting bids on closed registers).
+- `close_deal` (`:779`) sets `credentials_exchanged=True` and `status=CLOSED` unconditionally — makes `exchange_credentials` (`:829-848`) a no-op and closes the register on the first deal.
+- Dead branch in `confirm_payment` (`:992-998`): settlements are only ever linked to payments by `mark_settlement_paid` (`:952`), which already sets PAID, so the `!= PAID` auto-settle check never fires.
+- Settlement dedupe keyed on `payee_name` string (`:899-905`) — two contacts sharing a name (or the fallback `"Aggregated seller"`) silently collapse.
+- `book_warehouse` (`:644-668`) doesn't check warehouse `is_active`; `post_courier_job` never validates `dropoff_warehouse_id` exists.
+- `initiate_payment`/`confirm_payment` don't validate PENDING→SUCCEEDED transition (double-confirm overwrites `paid_at`).
+
+**2.3 — Missing `response_model` and dead schemas (P1)**
+Only `auth.py` and `monitoring.py` declare `response_model=`; 16+ Pydantic models in `app/schemas.py` (written for suppliers, recalls, insurance, esg, developer portal, retention) are **unused** — those routes still return hand-built dicts.
+
+**2.4 — Unused RBAC dependencies (P2)**
+`require_superuser`, `require_enterprise_or_admin`, `require_verifier_or_above` (`dependencies.py:105-120`) and `require_tier` (`tiers.py:60-76`) are defined but never attached to a route.
+
+**2.5 — Uncaught service exceptions → 500 (P1)**
+Routes that call services raising `ValueError`/`PermissionError` without a guard: `auth.py:110` (setup-totp), `codes.py:51` (scan), `commerce.py:152` (catches only PermissionError), `continuous_enrichment.py:35,82`, `events.py:35`, `retention.py:18`, `suppliers.py:50`, `search.py:13,50`.
+
+**2.6 — Money stored as `Float` (P1)**
+`commerce.py:146,202,228,252,281,309,339-341`, `rate.py:28`, `insurance.py:30-31,56` — float rounding on currency is a correctness risk. Use `Numeric(18,2)`.
+
+**2.7 — Last string-boolean: `rate.py:33`** `ItemRate.is_active = String(1)` default `"Y"` (fixed everywhere else; forces `== "Y"` at `rate_service.py:16,58,115`).
+
+**2.8 — No DB pool configuration**
+`database.py:6` — `create_async_engine(url, echo=False)` with asyncpg defaults (`pool_size=5`) and no `pool_pre_ping`/`pool_recycle`; startup seeding runs concurrently (`main.py:126`).
+
+**2.9 — `str(datetime)` serialisation (P2)**
+Non-ISO output across 16+ services, incl. `commerce_service.py`, `warehouse_service.py`, `shipping_service.py`, `batch_service.py`, `inventory_service.py`, `cargo_service.py`, `recall_service.py`, `event_service.py`, `telemetry_service.py`. Standardize on `.isoformat()`.
+
+**2.10 — N+1 query loops (P2)**
+`warehouse_service.py:20-32`, `shipping_service.py:28-36`, `batch_service.py:26-38,60-71`, `collection_service.py:29-38`, `inventory_service.py:30-31,308-309`, `commerce_service.py:508-510,822-824`, `search_service.py:404-406`, `taxonomy_service.py:230-234`. Commerce already models the fix with `selectinload` (`:889-896`) and a JOIN (`supplier_service.py:146-153`).
+
+**2.11 — Dead code / unused imports (P3)**
+`analytics_service.py:4,6,8` (`case`, `ProductCategory`, `CertificateType`); `batch_service.py:72-74` (`taxonomy_info` computed, never returned); `commerce_service.py:162,219,256` — `item or (b.item ...)` fallbacks can never resolve (item summaries silently omitted from `list_bids`/`list_deals`/`list_settlements`).
+
+**2.12 — `shipping_service.py:114-115`** assigns `str` estimated_departure/arrival straight onto DateTime columns — will fail on Postgres.
+
+**2.13 — Mixed datetime-default conventions (P3)** Python-side `default=lambda: datetime.now(timezone.utc)` (commerce, inventory, taxonomy) vs `server_default=func.now()` (product, certificate, user). Unify on `server_default` so raw/batch inserts get non-NULL values.
+
+---
+
+## 3. Frontend — Missed Implementations & Bugs
+
+**3.1 — The Commerce/Bulking Pipeline has NO frontend (P0 for completeness)**
+Backend is complete and registered, but `frontend/js/` contains **zero** references to commerce/bulking/appointments/settlements/payments. No route (`app.js:105-137`), no nav item, no API calls. The core new buyer-aggregation feature is unusable.
+
+**3.2 — Frontend i18n / RTL not implemented (P0 for Dubai market)**
+Backend ships `ar.json`/`en.json` + `i18n_service.py` + middleware, but the frontend has no language handling, no `dir`/`lang` attributes, no RTL CSS, and every string in `pages.js`/`components.js` is hardcoded English. The Dubai-first go-to-market needs this.
+
+**3.3 — Public Verify page is auth-gated (P1)**
+`app.js:108` wraps `Pages.verify` in `checkAuth`, and the nav only shows Verify when logged in (`components.js:245,325`). The "public trust" consumer verification — the platform's headline feature — is unreachable without an account.
+
+**3.4 — Sidebar shows blank username (P1)**
+`components.js:309` renders `user?.name || ''`; the backend/auth store provide `full_name`. Logged-in users always see an empty label.
+
+**3.5 — Cargo-tracking detail reads a nonexistent key (P1)**
+`pages.js:2547,2573` read `s.products`, but `get_shipment` (`shipping_service.py:86-106`) never returns `products` → "Products in Shipment" always renders `0`/`—`.
+
+**3.6 — SSO redirect targets nonexistent `login.html` (P1)**
+`pages.js:372` builds SSO redirect URIs against `/login.html`, which does not exist (single-page `index.html`). `Auth.ssoLogin()` is defined but never called.
+
+**3.7 — Search autocomplete is a no-op (P2)**
+`pages.js:1482-1487` creates a plain `<input>` with an empty listener, despite `components.js:128-228` having a working `autocompleteSearchInput`. Search page shows no live suggestions.
+
+**3.8 — PWA cache misses `js/seo.js` (P2)** `sw.js:2-15` precache omits `seo.js`, which `index.html:17` loads — offline pages lose meta injection.
+
+**3.9 — Backend-only features with no UI (P1 for completeness)**
+`recalls`, `suppliers`, `insurance`, `retention`, `tiers`, `esg`, `gov_integration`, `developer_portal`, `enrichment`, `events`, `telemetry` routers exist but have no frontend pages or nav entries.
+
+**3.10 — Collection taxonomy badges never render (P2)**
+`pages.js:2092-2093` renders `item.phylum`/`item.family`, but the collection-item serializer omits those fields.
+
+**3.11 — Nav gates mismatch (P2)** Several pages call auth-required endpoints (e.g. `/shipments/search` at `routes/shipments.py:39`, admin analytics) but are not auth-gated in the router — logged-out users get 401 error cards instead of redirects.
+
+---
+
+## 4. Testing & Infrastructure
+
+**4.1 — Commerce module has zero tests (P0)**
+No tests for any of the 30 new endpoints / 10 new models.
+
+**4.2 — CI runs Postgres, local tests run SQLite (P1)**
+`conftest.py:19` uses `sqlite+aiosqlite://`; `ci.yml` runs pytest against a Postgres service container. Migration DDL and FK integrity (SQLite ignores FKs by default) are not exercised locally. The `--cov-fail-under=70` gate is fragile given the untested surface (auth/search/commerce/taxonomy writes/events/telemetry all lack coverage).
+
+**4.3 — No tests for major domains (P1)**
+No coverage for: search, taxonomy writes, products, traceability, batches, warehouses, shipments, inventory, item movements, compliance, rates, enrichment, events, telemetry, developer portal, tiers, retention (service-level), commerce.
+
+**4.4 — CI lint gate is `ruff` (P1)** `ci.yml` installs latest `ruff` unpinned and runs `ruff check backend/` — no pin, no config file in repo.
+
+**4.5 — Dead-code cleanup** Stale `cbc0e0dbdee9_*` pyc in `alembic/versions/__pycache__/` for a deleted migration — harmless but confusing.
+
+**4.6 — Known operational gaps (unchanged, still open)** No request-ID correlation header; no background queue (webhooks/notifications fire-and-forget); SLA/metrics in-memory; no body-size limit; no login brute-force protection; `asyncpg` now pinned ✅.
+
+---
+
+## 5. Missed Implementations & Crucial Additions (Completion Roadmap)
+
+### Must do before go-live (blockers)
+
+| # | Item | Where | Why |
+|---|------|-------|-----|
+| C1 | Fix seeded superuser password (env-var sourced) + remove cleartext log | `user_seed_service.py:14,75,86` | Trivial compromise of every deployment |
+| C2 | Replace system-user `ADMIN` role with restricted role; gate `get_current_user_or_guest` writes | `dependencies.py:20,32`; products/traceability/certificates/collections/shipments/warehouses | Anonymous users can write as ADMIN |
+| C3 | Add auth to all `taxonomy.py` write endpoints | `taxonomy.py:165-318` | Core catalog can be destroyed publicly |
+| C4 | Wire `api_key_middleware` into `main.py` | `main.py` + middleware | API keys/rate limits are non-functional |
+| C5 | Make `/verify/{code}` public + under `/api/v1` | `verify.py:12-13`, `main.py:246` | Headline public feature is login-gated |
+| C6 | Enforce tenant isolation across services (or consciously mark global-read domains) | warehouse/shipping/batch/collection/insurance/supplier/product/search/analytics | Cross-tenant data exposure |
+| C7 | Guard remaining public sensitive reads + PII leaks | analytics/inventory/item_movements/shipments/certificates/contact, `commerce_service.py:802-847` | Competitor/PII exposure |
+| C8 | Add `response_model` + wire unused schemas; replace remaining `Query()` write params | `codes.py:41`, `continuous_enrichment.py:121`, `recalls.py:65`, `tiers.py:39`, `schemas.py` | API contract + Swagger UX |
+
+### Complete the platform (feature completeness)
+
+| # | Item | Where |
+|---|------|-------|
+| F1 | Build the Commerce/Bulking **frontend** (dashboard, registers, contacts, bids, deals, warehouse bookings, courier jobs, settlements, payments) | `frontend/js/pages.js` + nav |
+| F2 | Implement real payment-provider integration (Stripe/MPesa/Airtel/MTN webhooks, idempotency, refunds) — current flow is simulated (`confirm_payment` just flips status) | `commerce_service.py:962-999` |
+| F3 | Frontend i18n + RTL using the existing `ar.json`/`en.json` + `i18n_service` | frontend + `arabic_i18n.py` |
+| F4 | UI for backend-only modules: recalls, suppliers, insurance, retention, tiers, ESG, gov integration, developer portal, enrichment, events, telemetry | frontend |
+| F5 | Un-gate public verify page; add guest scan flow + landing UX | `app.js:108`, `pages.js:204-306` |
+| F6 | Fix commerce service correctness (register-number retry, bid item check, state machines, settlement dedupe, payment/settlement linkage, remove dead auto-settle branch) | `commerce_service.py` |
+| F7 | Money columns → `Numeric(18,2)`; `rate.py` `is_active` → Boolean + migration | models + migration |
+| F8 | `pydantic-settings` migration for `Settings` + `ENV` gate on secret guard + `RETURN_OTP_IN_DEV=false` default | `config.py` |
+| F9 | Background job queue for webhooks/notifications/expiry + persisted request metrics | infra |
+| F10 | Request body size limit + correlation-ID middleware + public rate limiting (slowapi/fastapi-limiter) | infra |
+| F11 | DB pool tuning (`pool_size`, `pool_pre_ping`, `pool_recycle`) | `database.py` |
+
+### Engineering hygiene (debt)
+
+| # | Item |
+|---|------|
+| H1 | Standardize datetime serialisation on `.isoformat()` (16+ services) |
+| H2 | Kill N+1 loops with `selectinload`/JOINs |
+| H3 | Remove dead code (unused imports, `batch_service.py:72-74`, commerce `item or` fallbacks, unused RBAC deps, unused schemas) |
+| H4 | Wrap all `ValueError`/`PermissionError` routes; consistent `_raise` helper (commerce pattern) |
+| H5 | Fix frontend: `full_name` sidebar, `s.products` cargo detail, `login.html` SSO, search autocomplete, `sw.js` precache, collection badges |
+| H6 | Add Postgres CI job + commerce/search/auth/taxonomy tests; pin `ruff` |
+| H7 | Unify `server_default` timestamps; add missing indexes (commerce FKs on `created_by`, etc.) |
+
+**Biggest risks to completion, in order:** (1) anonymous-ADMIN minting + hardcoded superuser password, (2) zero-auth taxonomy writes + unwired API-key middleware, (3) commerce module has no frontend or tests, (4) tenant isolation unenforced, (5) no frontend i18n/RTL for the Dubai market.

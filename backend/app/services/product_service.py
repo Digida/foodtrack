@@ -30,6 +30,7 @@ async def create_product(db: AsyncSession, user: User, sku: str, name: str, cate
         producer_id=user.id, producer_name=producer_name or user.full_name,
         weight_kg=weight_kg, storage_requirements=storage_requirements,
         qr_code=qr_b64, barcode=barcode_b64, metadata_json=metadata_json,
+        tenant_id=user.tenant_id,
     )
     if harvest_date:
         product.harvest_date = datetime.fromisoformat(harvest_date.replace("Z", "+00:00"))
@@ -45,10 +46,13 @@ async def create_product(db: AsyncSession, user: User, sku: str, name: str, cate
 
 
 async def list_products(db: AsyncSession, skip: int = 0, limit: int = 50,
-                        category: ProductCategory | None = None) -> list[dict]:
+                        category: ProductCategory | None = None,
+                        tenant_id: int | None = None) -> list[dict]:
     query = select(Product).where(Product.is_active == True)
     if category:
         query = query.where(Product.category == category)
+    if tenant_id:
+        query = query.where(Product.tenant_id == tenant_id)
     query = query.offset(skip).limit(limit).order_by(Product.created_at.desc())
     result = await db.execute(query)
     return [{"id": p.id, "sku": p.sku, "name": p.name, "category": p.category.value,

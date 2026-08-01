@@ -1,5 +1,6 @@
 """Authentication & security service: register, login, JWT, SSO, TOTP, phone/email MFA, WebAuthn biometrics."""
 
+import random
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -150,8 +151,13 @@ async def confirm_totp(user: User, code: str, db: AsyncSession) -> None:
 
 # --- Email OTP ---
 
+def _uniform_otp_code() -> str:
+    """Return a uniformly distributed 6-digit code (000000-999999)."""
+    return f"{random.SystemRandom().randrange(10 ** 6):06d}"
+
+
 def generate_email_otp() -> tuple[str, str]:
-    code = str(uuid.uuid4().int)[:6]
+    code = _uniform_otp_code()
     token = serializer.dumps(code)
     return code, token
 
@@ -190,7 +196,7 @@ async def send_email_otp(email: str, code: str) -> bool:
 # --- Phone OTP ---
 
 def generate_phone_otp() -> str:
-    return str(uuid.uuid4().int)[:6]
+    return _uniform_otp_code()
 
 
 async def send_sms_otp(phone: str, code: str) -> bool:

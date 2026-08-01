@@ -15,6 +15,7 @@ class Settings:
         os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
     )
     SITE_URL: str = os.getenv("SITE_URL", "http://localhost:8000")
+    ENV: str = os.getenv("ENV", "development")
 
     # External service URLs — override via environment variables
     EMAIL_API_URL: str = os.getenv("EMAIL_API_URL", "")
@@ -31,12 +32,16 @@ class Settings:
 
     # When true (and no email/SMS service is configured) OTP codes are
     # returned in the API response so demo/testing flows can complete.
-    RETURN_OTP_IN_DEV: bool = os.getenv("RETURN_OTP_IN_DEV", "true").lower() in ("1", "true", "yes")
+    # Defaults to FALSE — production must never echo OTP codes.
+    RETURN_OTP_IN_DEV: bool = os.getenv("RETURN_OTP_IN_DEV", "false").lower() in ("1", "true", "yes")
 
     def validate_production(self) -> None:
-        """Raise at startup if critical secrets are still at insecure defaults."""
-        is_sqlite = self.DATABASE_URL.startswith("sqlite")
-        if not is_sqlite and self.SECRET_KEY == "change-me":
+        """Raise at startup if critical secrets are still at insecure defaults.
+
+        Gated on the deployment environment (ENV), not the database type, so
+        a SQLite-backed production-ish deployment is still caught.
+        """
+        if self.ENV != "development" and self.SECRET_KEY == "change-me":
             print(
                 "FATAL: SECRET_KEY is set to the insecure default 'change-me'. "
                 "Set the SECRET_KEY environment variable before starting the server.",

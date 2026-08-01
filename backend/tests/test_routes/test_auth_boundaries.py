@@ -1,9 +1,9 @@
 """Tests for authentication and role-based access control boundaries.
 
-Only Cargo tracking, Verify, and Batches (incl. serial numbers) are
-login-gated. Every other page and feature is available to unregistered users.
+Only Verify, health, search, and products list are open to unregistered
+users. Every other page and feature is login-gated.
   - Login-gated endpoints must return 401 to unauthenticated requests
-  - Public endpoints must return 200 to unauthenticated requests
+  - Public endpoints must return 200 (or 404) to unauthenticated requests
   - Role-gated endpoints must return 403 to roles that are not permitted
 """
 import pytest
@@ -44,11 +44,12 @@ async def test_health_is_public(anon_client: AsyncClient):
     assert resp.status_code == 200
 
 
-# ── login-gated features (verify, batches, cargo tracking) ───────────────────
+# ── login-gated features (batches, cargo tracking) ───────────────────────────
 
-async def test_verify_requires_auth(anon_client: AsyncClient):
+async def test_verify_is_public(anon_client: AsyncClient):
+    """Verify endpoint is open to unregistered users (public scan resolution)."""
     resp = await anon_client.get("/verify/test-code")
-    assert resp.status_code == 401
+    assert resp.status_code == 404  # unknown code, but NOT 401 — public endpoint
 
 
 async def test_batches_list_requires_auth(anon_client: AsyncClient):
@@ -73,9 +74,9 @@ async def test_products_list_is_public(anon_client: AsyncClient):
     assert resp.status_code == 200
 
 
-async def test_analytics_dashboard_is_public(anon_client: AsyncClient):
+async def test_analytics_dashboard_requires_auth(anon_client: AsyncClient):
     resp = await anon_client.get("/api/v1/analytics/dashboard")
-    assert resp.status_code == 200
+    assert resp.status_code == 401
 
 
 async def test_search_is_public(anon_client: AsyncClient):
@@ -112,20 +113,19 @@ async def test_recall_trace_requires_auth(anon_client: AsyncClient):
 
 # ── certificate reads ─────────────────────────────────────────────────────────
 
-async def test_certificate_by_item_is_public(anon_client: AsyncClient):
-    """Certificate reads are open to unregistered users."""
+async def test_certificate_by_item_requires_auth(anon_client: AsyncClient):
     resp = await anon_client.get("/api/v1/certificates/by-item/1")
-    assert resp.status_code == 200
+    assert resp.status_code == 401
 
 
-async def test_certificate_verify_chain_returns_not_found_for_unknown_item(anon_client: AsyncClient):
+async def test_certificate_verify_chain_requires_auth(anon_client: AsyncClient):
     resp = await anon_client.get("/api/v1/certificates/verify-chain/1")
-    assert resp.status_code == 404
+    assert resp.status_code == 401
 
 
-async def test_certificate_requests_list_is_public(anon_client: AsyncClient):
+async def test_certificate_requests_list_requires_auth(anon_client: AsyncClient):
     resp = await anon_client.get("/api/v1/certificates/requests")
-    assert resp.status_code == 200
+    assert resp.status_code == 401
 
 
 # ── event logs ───────────────────────────────────────────────────────────────

@@ -9,7 +9,7 @@ from app.services.collection_service import (
     delete_collection, add_item_to_collection, remove_item_from_collection,
     list_feed_sources, create_feed_source, delete_feed_source, run_ai_feed,
 )
-from app.utils.dependencies import get_current_user_or_guest
+from app.utils.dependencies import get_current_user, get_current_user_or_guest
 
 router = APIRouter(prefix="/collections", tags=["collections"])
 
@@ -157,6 +157,7 @@ async def api_create_feed(
 @router.post("/feeds/{feed_id}/run")
 async def api_run_feed(
     feed_id: int,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:

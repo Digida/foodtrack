@@ -18,15 +18,25 @@ from app.services.auth_service import (
 
 # ── email verification ────────────────────────────────────────────────────────
 
-async def test_email_verification_flow(db: AsyncSession):
+async def test_email_verification_flow(db: AsyncSession, monkeypatch):
+    from app.services import auth_service
+    monkeypatch.setattr(auth_service.settings, "RETURN_OTP_IN_DEV", True)
+
     user, _ = await register_user(db, "verify@example.com", "password123", "Verify User", phone="+256700000000")
     result = await request_email_verification(db, user)
     assert result["channel"] == "email"
     assert result["sent"] is False  # no email service configured
-    assert "dev_code" in result  # RETURN_OTP_IN_DEV defaults to true
+    assert "dev_code" in result  # dev echo only when RETURN_OTP_IN_DEV is enabled
 
     await verify_email_address(db, user, result["dev_code"])
     assert user.email_verified is True
+
+
+async def test_email_verification_no_dev_code_by_default(db: AsyncSession):
+    user, _ = await register_user(db, "verify0@example.com", "password123", "Verify User 0")
+    result = await request_email_verification(db, user)
+    assert result["channel"] == "email"
+    assert "dev_code" not in result  # RETURN_OTP_IN_DEV defaults to false
 
 
 async def test_email_verify_wrong_code(db: AsyncSession):
@@ -44,7 +54,10 @@ async def test_email_verify_without_request_raises(db: AsyncSession):
 
 # ── phone verification ────────────────────────────────────────────────────────
 
-async def test_phone_verification_flow(db: AsyncSession):
+async def test_phone_verification_flow(db: AsyncSession, monkeypatch):
+    from app.services import auth_service
+    monkeypatch.setattr(auth_service.settings, "RETURN_OTP_IN_DEV", True)
+
     user, _ = await register_user(db, "phone1@example.com", "password123", "Phone User", phone="+256700123456")
     result = await request_phone_verification(db, user)
     assert result["channel"] == "phone"

@@ -43,13 +43,13 @@ async def test_create_policy_non_admin_denied(db: AsyncSession):
 async def test_create_policy_invalid_table_rejected(db: AsyncSession):
     """SQL injection guard: entity_type must be in the whitelist."""
     user = await _admin(db, "2")
-    with pytest.raises(ValueError, match="not in the allowed"):
+    with pytest.raises(ValueError, match="Allowed tables"):
         await create_archive_policy(db, user, "users; DROP TABLE users;--", 30)
 
 
 async def test_create_policy_unknown_table_rejected(db: AsyncSession):
     user = await _admin(db, "3")
-    with pytest.raises(ValueError, match="not in the allowed"):
+    with pytest.raises(ValueError, match="Allowed tables"):
         await create_archive_policy(db, user, "some_random_table", 60)
 
 

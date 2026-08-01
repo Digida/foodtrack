@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from decimal import Decimal
 
 from app.models.rate import ItemRate
 from app.models.taxonomy import TaxonomyItem
@@ -13,7 +14,7 @@ async def get_rates_for_item(db: AsyncSession, item_id: int) -> dict | None:
     rows = await db.execute(
         select(ItemRate).where(
             ItemRate.item_id == item_id,
-            ItemRate.is_active == "Y",
+            ItemRate.is_active.is_(True),
         ).order_by(ItemRate.price_per_kg.asc())
     )
     rates = []
@@ -55,7 +56,7 @@ async def calculate_shipping_cost(
         ItemRate.item_id == item_id,
         ItemRate.origin_region.ilike(f"%{origin_region}%"),
         ItemRate.destination_region.ilike(f"%{destination_region}%"),
-        ItemRate.is_active == "Y",
+        ItemRate.is_active.is_(True),
     )
     if mode:
         q = q.where(ItemRate.mode == mode)
@@ -75,7 +76,7 @@ async def calculate_shipping_cost(
 
     estimates = []
     for r in rows:
-        cost = round(r.price_per_kg * weight_kg, 2)
+        cost = round(Decimal(str(r.price_per_kg)) * Decimal(str(weight_kg)), 2)
         estimates.append({
             "rate_id": r.id,
             "mode": r.mode,
@@ -112,7 +113,7 @@ async def compare_rates(
             ItemRate.item_id == item_id,
             ItemRate.origin_region.ilike(f"%{origin_region}%"),
             ItemRate.destination_region.ilike(f"%{destination_region}%"),
-            ItemRate.is_active == "Y",
+            ItemRate.is_active.is_(True),
         ).order_by(ItemRate.price_per_kg.asc())
     )
 

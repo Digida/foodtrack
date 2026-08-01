@@ -62,9 +62,10 @@ async def api_create_product(req: ProductCreateRequest, user: User = Depends(get
 async def api_list_products(
     skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200),
     category: ProductCategory | None = None,
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
-    products = await list_products(db, skip, limit, category)
+    products = await list_products(db, skip, limit, category, tenant_id=user.tenant_id)
     return {"products": products, "total": len(products)}
 
 

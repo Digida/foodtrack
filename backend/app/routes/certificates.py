@@ -52,6 +52,7 @@ async def api_issue_certificate(
 async def api_list_certificates(
     status: CertificateStatus | None = None,
     type: CertificateType | None = None,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     certs = await list_certificates(db, status, type)
@@ -66,6 +67,7 @@ async def api_list_certificates(
 async def api_list_requests(
     status: CertificateRequestStatus | None = None,
     applicant_id: int | None = None,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     requests = await list_certificate_requests(db, status, applicant_id)
@@ -75,6 +77,7 @@ async def api_list_requests(
 @router.get("/requests/{request_id}")
 async def api_get_request(
     request_id: int,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     cr = await get_certificate_request(db, request_id)
@@ -86,6 +89,7 @@ async def api_get_request(
 @router.get("/{certificate_id}")
 async def api_get_certificate(
     certificate_id: str,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     cert = await get_certificate(db, certificate_id)
@@ -123,6 +127,7 @@ async def api_revoke_certificate(
 @router.get("/by-item/{item_id}")
 async def api_certificates_by_item(
     item_id: int,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     certs = await get_certificates_for_item(db, item_id)
@@ -132,6 +137,7 @@ async def api_certificates_by_item(
 @router.get("/verify-chain/{item_id}")
 async def api_verify_certificate_chain(
     item_id: int,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -145,6 +151,7 @@ async def api_verify_certificate_chain(
 async def api_missing_certifications(
     item_id: int,
     target_market: str = "dubai_import",
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     try:

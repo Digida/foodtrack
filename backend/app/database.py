@@ -32,6 +32,6 @@ async def init_db():
             from app.models import (  # noqa: F401
                 user, product, certificate, traceability, taxonomy, tracking,
                 cargo, tenant, enrichment, events, telemetry, api_key,
-                retention, esg, recall, supplier, insurance,
+                retention, esg, recall, supplier, insurance, commerce,
             )
             await conn.run_sync(Base.metadata.create_all)

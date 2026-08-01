@@ -7,6 +7,8 @@ from sqlalchemy import select
 
 from app.database import get_db
 from app.models.contact import ContactMessage
+from app.models.user import User
+from app.utils.dependencies import require_admin
 
 router = APIRouter(tags=["contact"])
 
@@ -24,7 +26,10 @@ class ContactResponse(BaseModel):
 
 
 @router.get("/contact/messages", response_model=list[dict])
-async def get_contact_messages(db: AsyncSession = Depends(get_db)):
+async def get_contact_messages(
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
     result = await db.execute(
         select(ContactMessage).order_by(ContactMessage.created_at.desc())
     )

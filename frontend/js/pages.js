@@ -233,28 +233,27 @@ Pages.verify = (app) => {
       const el = document.getElementById('v-result');
       el.innerHTML = '<div class="spinner"></div>';
       try {
-        const data = await API.get(`/traceability/scan/${encodeURIComponent(query)}`);
+        const data = await API.get(`/verify/${encodeURIComponent(query)}`);
+        const primary = data.products && data.products[0];
+        const certsBlock = (data.certificates || []).length ? `
+          <p style="color:var(--text-light)">${data.certificates.length} certificate(s)</p>
+          <div style="margin-top:8px">${data.certificates.slice(0,5).map(c => `
+            <div style="padding:8px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px">
+              <strong>${c.type.toUpperCase()}</strong> · <span class="badge ${c.status === 'verified' ? 'badge-success' : c.status === 'issued' ? 'badge-info' : c.status === 'revoked' ? 'badge-danger' : 'badge-secondary'}">${c.status}</span>
+              <div style="color:var(--text-light);font-size:13px">${c.issuer_name || ''}${c.issued_date ? ' · Issued: ' + new Date(c.issued_date).toLocaleDateString() : ''}${c.expiry_date ? ' · Expires: ' + new Date(c.expiry_date).toLocaleDateString() : ''}</div>
+            </div>`).join('')}</div>` : '';
         el.innerHTML = `<div class="scan-result">
-          <h4>${data.product.name} (${data.product.sku})</h4>
-          <p style="color:var(--text-light)">Producer: ${data.product.producer_name}</p>
-          <p style="color:var(--text-light)">${data.events.length} trace event(s)</p>
-          ${data.events.length > 0 ? `<div class="timeline" style="margin-top:12px">${data.events.map(e => `
+          <h4>${data.item.common_name || data.item.code} ${data.item.scientific_name ? '<span style="font-weight:400;color:var(--text-light);font-size:13px">(' + data.item.scientific_name + ')</span>' : ''}</h4>
+          ${data.item.description ? `<p style="color:var(--text-light)">${data.item.description}</p>` : ''}
+          ${primary ? `<p style="color:var(--text-light)">Product: ${primary.name} (${primary.sku}) · Producer: ${primary.producer_name || '—'}</p>` : ''}
+          ${data.products && data.products.length > 1 ? `<p style="color:var(--text-light)">${data.products.length - 1} more product(s) listed</p>` : ''}
+          ${certsBlock}
+          ${(data.timeline || []).length > 0 ? `<p style="color:var(--text-light);margin-top:10px">${data.timeline.length} trace event(s)</p><div class="timeline" style="margin-top:8px">${data.timeline.map(e => `
             <div class="timeline-item"><div class="tl-title">${e.event_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</div>
             <div class="tl-sub">${e.location_name || ''} ${e.country ? '· '+e.country : ''} · ${new Date(e.event_timestamp).toLocaleString()}</div></div>`).join('')}</div>` : ''}</div>`;
         document.getElementById('v-scan-result').innerHTML = '';
       } catch (e) {
-        try {
-          const cert = await API.get(`/certificates/${encodeURIComponent(query)}`);
-          const statusCls = { 'verified':'badge-success', 'issued':'badge-info', 'revoked':'badge-danger', 'draft':'badge-secondary', 'expired':'badge-warning' };
-          el.innerHTML = `<div class="scan-result">
-            <h4>Certificate ${cert.certificate_id}</h4>
-            <p>Type: ${cert.type.toUpperCase()} · <span class="badge ${statusCls[cert.status]||'badge-secondary'}">${cert.status}</span></p>
-            <p style="color:var(--text-light)">Issuer: ${cert.issuer_name}${cert.recipient_entity ? ' · Recipient: '+cert.recipient_entity : ''}</p>
-            <p style="color:var(--text-light)">Issued: ${new Date(cert.issued_date).toLocaleDateString()}${cert.expiry_date ? ' · Expires: '+new Date(cert.expiry_date).toLocaleDateString() : ''}</p>
-            ${cert.description ? `<p style="color:var(--text-light);margin-top:4px">${cert.description}</p>` : ''}</div>`;
-        } catch (e2) {
-          el.innerHTML = `<div class="scan-result" style="background:#f8d7da;color:#721c24">No product or certificate found for "${query}"</div>`;
-        }
+        el.innerHTML = `<div class="scan-result" style="background:#f8d7da;color:#721c24">No product or certificate found for "${query}"</div>`;
       }
     }
 
@@ -369,7 +368,7 @@ Pages.login = (app) => {
           btn.addEventListener('click', () => {
             const p = btn.dataset.provider;
             const provider = enabled.find(x => x.provider === p);
-            const redirectUri = provider.redirect_uri || window.location.origin + '/login.html';
+            const redirectUri = provider.redirect_uri || window.location.origin + '/login.html?provider=' + p;
             let url = '';
             if (p === 'google') {
               url = 'https://accounts.google.com/o/oauth2/v2/auth?client_id=' +
@@ -1396,7 +1395,7 @@ function renderAdminUsers(data, callerRole) {
 
 Pages.showEditProfile = (me) => {
   const m = UI.modal('Edit Profile', `
-    <div class="form-group"><label>Full Name</label><input id="ep-name" class="fi" value="${me.name}"></div>
+    <div class="form-group"><label>Full Name</label><input id="ep-name" class="fi" value="${me.full_name}"></div>
     <div class="form-group"><label>Company</label><input id="ep-co" class="fi" value="${me.company||''}"></div>
     <div class="form-group"><label>Phone</label><input id="ep-phone" class="fi" type="tel" value="${me.phone||''}"></div>
   `);
@@ -1413,7 +1412,7 @@ Pages.showEditProfile = (me) => {
       m.close();
       UI.showSuccess('Profile updated');
       const user = Auth.getUser();
-      if (user) { user.name = updated.name; localStorage.setItem('ft_user', JSON.stringify(user)); }
+      if (user) { user.full_name = updated.full_name; localStorage.setItem('ft_user', JSON.stringify(user)); }
       Router.navigate('#settings');
     } catch (e) { UI.showError(e.message); btn.disabled = false; }
   }));
@@ -1458,6 +1457,7 @@ Pages.search = (app, query) => {
         <form id="search-form" style="display:flex;gap:8px">
           <div class="autocomplete-wrap" style="flex:1">
             <input id="search-input" class="fi" placeholder="Search taxonomy items, products, batches, warehouses, collections..." style="width:100%" value="${q.replace(/"/g, '"')}">
+            <div class="autocomplete-dropdown" id="search-ac-dropdown"></div>
           </div>
           <button class="btn btn-primary" id="search-btn">🔍 Search</button>
         </form>
@@ -1480,13 +1480,74 @@ Pages.search = (app, query) => {
 
     // Autocomplete on search page
     const searchInput = body.querySelector('#search-input');
-    let acTimeout = null;
+    const acDropdown = body.querySelector('#search-ac-dropdown');
+    let acTimeout = null, acSelectedIndex = -1, acResults = [];
+    const closeAc = () => {
+      acDropdown.classList.remove('open');
+      acDropdown.innerHTML = '';
+      acSelectedIndex = -1;
+      acResults = [];
+    };
+    const highlightAc = (idx) => {
+      acDropdown.querySelectorAll('.autocomplete-item').forEach((el, i) => el.classList.toggle('highlighted', i === idx));
+    };
     searchInput.addEventListener('input', () => {
       clearTimeout(acTimeout);
-      // Autocomplete handled by global UI.autocompleteSearchInput, but page search is manual
+      const val = searchInput.value.trim();
+      if (val.length < 2) { closeAc(); return; }
+      acTimeout = setTimeout(async () => {
+        try {
+          const data = await API.get(`/search/autocomplete?q=${encodeURIComponent(val)}&limit=8`);
+          acResults = data.results || [];
+          if (acResults.length === 0) { closeAc(); return; }
+          acDropdown.innerHTML = acResults.map((r, i) => {
+            const iconChar = r.type === 'taxonomy_item' ? '🌿' : r.type === 'product' ? '📦' : '🏷️';
+            return `<div class="autocomplete-item" data-index="${i}" data-url="${r.url}">
+              <div class="ac-icon">${iconChar}</div>
+              <div><div class="ac-label">${r.label}</div><div class="ac-sub">${r.subtitle || ''}</div></div>
+            </div>`;
+          }).join('');
+          acDropdown.classList.add('open');
+          acSelectedIndex = -1;
+          highlightAc(-1);
+        } catch (e) { closeAc(); }
+      }, 250);
     });
     searchInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); doSearch(1); }
+      const items = acDropdown.querySelectorAll('.autocomplete-item');
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        acSelectedIndex = Math.min(acSelectedIndex + 1, items.length - 1);
+        highlightAc(acSelectedIndex);
+        if (items[acSelectedIndex]) items[acSelectedIndex].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        acSelectedIndex = Math.max(acSelectedIndex - 1, -1);
+        highlightAc(acSelectedIndex);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (acSelectedIndex >= 0 && acResults[acSelectedIndex]) {
+          const url = acResults[acSelectedIndex].url;
+          closeAc();
+          searchInput.blur();
+          Router.navigate(url);
+        } else {
+          doSearch(1);
+        }
+      } else if (e.key === 'Escape') {
+        closeAc();
+      }
+    });
+    searchInput.addEventListener('blur', () => { setTimeout(closeAc, 200); });
+    acDropdown.addEventListener('mousedown', (e) => {
+      const item = e.target.closest('.autocomplete-item');
+      if (item) {
+        e.preventDefault();
+        const url = item.dataset.url;
+        closeAc();
+        searchInput.blur();
+        Router.navigate(url);
+      }
     });
 
     body.querySelector('#search-form').onsubmit = (e) => { e.preventDefault(); doSearch(1); };

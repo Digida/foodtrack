@@ -105,6 +105,9 @@ _KNOWN_TABLES = [
     "webhook_subscriptions", "event_logs", "api_keys", "search_logs",
     "enrichment_logs", "enrichment_suggestions", "item_carbon_footprints",
     "archive_policies", "item_rates", "item_identifier_logs",
+    "appointments", "bulking_registers", "bulking_contacts", "bulking_bids",
+    "warehouse_bookings", "courier_jobs", "commerce_deals", "commerce_payments",
+    "commerce_settlements",
 ]
 
 

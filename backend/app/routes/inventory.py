@@ -35,6 +35,7 @@ class TransferCreate(BaseModel):
 
 @router.get("/summary")
 async def api_inventory_summary(
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await get_inventory_summary(db)
@@ -43,6 +44,7 @@ async def api_inventory_summary(
 @router.get("/items/{item_id}")
 async def api_get_item_inventory(
     item_id: int,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await get_item_inventory(db, item_id)
@@ -54,6 +56,7 @@ async def api_get_item_inventory(
 @router.get("/items/{item_id}/warehouses/{warehouse_id}")
 async def api_get_item_warehouse_detail(
     item_id: int, warehouse_id: int,
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     result = await get_item_warehouse_detail(db, item_id, warehouse_id)
@@ -67,6 +70,7 @@ async def api_get_movement_history(
     item_id: int,
     page: int = Query(1, ge=1),
     days: int | None = Query(None, description="Filter by last N days"),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await get_movement_history(db, item_id, page, days)
@@ -109,6 +113,7 @@ async def api_transfer_inventory(
 async def api_get_warehouse_items(
     warehouse_id: int,
     page: int = Query(1, ge=1),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await get_warehouse_items(db, warehouse_id, page)

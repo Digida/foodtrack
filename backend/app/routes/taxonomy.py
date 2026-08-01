@@ -5,6 +5,7 @@ from sqlalchemy import select
 
 from app.database import get_db
 from app.models.taxonomy import Taxonomy, TaxonomyNode, TaxonomyItem, ItemName, ItemAttribute
+from app.models.user import User
 from app.services.taxonomy_service import (
     list_taxonomies, get_taxonomy, get_taxonomy_tree,
     create_taxonomy, update_taxonomy, delete_taxonomy,
@@ -12,6 +13,7 @@ from app.services.taxonomy_service import (
     create_item, update_item, list_items, serialize_taxonomy,
 )
 from app.services.search_service import get_taxonomy_item_detail, get_taxonomy_item_by_code
+from app.utils.dependencies import require_verifier_or_above
 
 router = APIRouter(prefix="/taxonomy", tags=["taxonomy"])
 
@@ -165,6 +167,7 @@ async def api_get_tree(
 @router.post("")
 async def api_create_taxonomy(
     req: TaxonomyCreate,
+    user: User = Depends(require_verifier_or_above),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -177,6 +180,7 @@ async def api_create_taxonomy(
 @router.put("/{taxonomy_id}")
 async def api_update_taxonomy(
     taxonomy_id: int, req: TaxonomyUpdate,
+    user: User = Depends(require_verifier_or_above),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -189,6 +193,7 @@ async def api_update_taxonomy(
 @router.delete("/{taxonomy_id}")
 async def api_delete_taxonomy(
     taxonomy_id: int,
+    user: User = Depends(require_verifier_or_above),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -203,6 +208,7 @@ async def api_delete_taxonomy(
 @router.post("/{taxonomy_id}/nodes")
 async def api_create_node(
     taxonomy_id: int, req: NodeCreate,
+    user: User = Depends(require_verifier_or_above),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -215,6 +221,7 @@ async def api_create_node(
 @router.put("/nodes/{node_id}")
 async def api_update_node(
     node_id: int, req: NodeUpdate,
+    user: User = Depends(require_verifier_or_above),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -227,6 +234,7 @@ async def api_update_node(
 @router.delete("/nodes/{node_id}")
 async def api_delete_node(
     node_id: int,
+    user: User = Depends(require_verifier_or_above),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -250,6 +258,7 @@ async def api_get_node_items(
 @router.post("/items")
 async def api_create_item(
     req: ItemCreate,
+    user: User = Depends(require_verifier_or_above),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -287,6 +296,7 @@ async def api_get_item_by_code(
 @router.put("/items/{item_id}")
 async def api_update_item(
     item_id: int, req: ItemUpdate,
+    user: User = Depends(require_verifier_or_above),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -301,6 +311,7 @@ async def api_update_item(
 @router.post("/items/{item_id}/names")
 async def api_add_name(
     item_id: int, req: NameCreate,
+    user: User = Depends(require_verifier_or_above),
     db: AsyncSession = Depends(get_db),
 ):
     item = await db.get(TaxonomyItem, item_id)
@@ -318,6 +329,7 @@ async def api_add_name(
 @router.post("/items/{item_id}/attributes")
 async def api_add_attribute(
     item_id: int, req: AttributeCreate,
+    user: User = Depends(require_verifier_or_above),
     db: AsyncSession = Depends(get_db),
 ):
     item = await db.get(TaxonomyItem, item_id)

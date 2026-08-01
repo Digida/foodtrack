@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1a6b3c">
+<title>Signing you in — FoodTrack</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body style="display:flex;align-items:center;justify-content:center;min-height:100vh">
+<div id="app" class="auth-container" style="width:100%">
+  <div class="auth-card" style="text-align:center">
+    <div class="logo">Food<span>Track</span></div>
+    <div id="sso-status">Completing sign-in…</div>
+    <a id="sso-back" href="/#login" style="display:none;margin-top:16px" class="btn btn-outline btn-block">Back to Login</a>
+  </div>
+</div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+(function () {
+  const params = new URLSearchParams(window.location.search);
+  const provider = params.get('provider');
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const token = hash.get('access_token');
+  const error = hash.get('error');
+  const status = document.getElementById('sso-status');
+  const back = document.getElementById('sso-back');
+
+  async function finish() {
+    try {
+      await Auth.ssoLogin(provider, token);
+      window.location.href = '/#dashboard';
+    } catch (e) {
+      status.textContent = 'Sign-in failed: ' + (e.message || 'Unable to complete sign-in');
+      back.style.display = 'block';
+    }
+  }
+
+  if (error) {
+    status.textContent = 'Sign-in cancelled or denied by the provider.';
+    back.style.display = 'block';
+  } else if (!provider || !token) {
+    status.textContent = 'Missing sign-in credentials. Please log in again.';
+    back.style.display = 'block';
+  } else {
+    finish();
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Text, DateTime, Float, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, Float, Boolean, Numeric, ForeignKey
 from sqlalchemy.orm import relationship
 import enum
 
@@ -25,12 +25,12 @@ class ItemRate(Base):
     destination_region = Column(String(255), nullable=False)
     mode = Column(String(50), nullable=False)
     carrier = Column(String(255), nullable=True)
-    price_per_kg = Column(Float, nullable=False)
+    price_per_kg = Column(Numeric(18, 2), nullable=False)
     currency = Column(String(3), default="USD")
     transit_days_min = Column(Integer, nullable=True)
     transit_days_max = Column(Integer, nullable=True)
     notes = Column(Text, nullable=True)
-    is_active = Column(String(1), default="Y")
+    is_active = Column(Boolean, default=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
