@@ -26,6 +26,7 @@ class UserSummary(BaseModel):
     email: str
     name: str
     role: str
+    user_type: str | None = None
     tenant_id: int | None = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -33,6 +34,7 @@ class UserSummary(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: str | None = None
     token_type: str
     user: UserSummary
 
@@ -52,6 +54,9 @@ class UserDetailResponse(BaseModel):
     alternate_email: str | None = None
     alternate_phone: str | None = None
     role: str
+    user_type: str | None = None
+    roles: list[str] = []
+    permissions: list[str] = []
     is_active: bool
     email_verified: bool
     phone_verified: bool = False

@@ -17,18 +17,18 @@ AI-powered platform for traceability, digital certification, and supply-chain vi
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     TAXONOMY ITEM                            │
+│                     TAXONOMY ITEM                           │
 │  (the atomic unit — a banana, a coffee bean, a fish)        │
-│  Biological classification, multilingual names, attributes   │
+│  Biological classification, multilingual names, attributes  │
 ├──────────────────┬──────────────────┬───────────────────────┤
-│  ▲ ITEM DETAIL   │  ▲ ITEM STORAGE  │  ▲ ITEM MOVEMENT       │
-│  (digital twin)  │  (aggregated)    │  (lifecycle)           │
+│  ▲ ITEM DETAIL   │  ▲ ITEM STORAGE  │  ▲ ITEM MOVEMENT      │
+│  (digital twin)  │  (aggregated)    │  (lifecycle)          │
 ├──────────────────┼──────────────────┼───────────────────────┤
-│  Certificates    │  Warehouses      │  Batches               │
-│  Traceability    │  Zones/Bins      │  Shipments             │
-│  Media/Attach    │  Stock levels    │  Tracking Events       │
-│  QR/NFC/Barcode  │  Capacity        │  ETAs / Delays         │
-│  Provenance      │  Cold chain      │  Transshipments        │
+│  Certificates    │  Warehouses      │  Batches              │
+│  Traceability    │  Zones/Bins      │  Shipments            │
+│  Media/Attach    │  Stock levels    │  Tracking Events      │
+│  QR/NFC/Barcode  │  Capacity        │  ETAs / Delays        │
+│  Provenance      │  Cold chain      │  Transshipments       │
 └──────────────────┴──────────────────┴───────────────────────┘
 ```
 

@@ -33,5 +33,6 @@ async def init_db():
                 user, product, certificate, traceability, taxonomy, tracking,
                 cargo, tenant, enrichment, events, telemetry, api_key,
                 retention, esg, recall, supplier, insurance, commerce,
+                rbac,
             )
             await conn.run_sync(Base.metadata.create_all)

@@ -75,14 +75,20 @@ async def test_phone_verify_requires_phone(db: AsyncSession):
 
 # ── SSO provider list ─────────────────────────────────────────────────────────
 
-def test_sso_providers_listed():
+def test_sso_providers_listed(monkeypatch):
+    from app.services import auth_service
+    monkeypatch.setattr(auth_service.settings, "GOOGLE_CLIENT_ID", "test-google-id")
+    monkeypatch.setattr(auth_service.settings, "MICROSOFT_CLIENT_ID", "test-ms-id")
+    monkeypatch.setattr(auth_service.settings, "APPLE_CLIENT_ID", "")
+    monkeypatch.setattr(auth_service.settings, "GITHUB_CLIENT_ID", "")
     providers = list_sso_providers()
     names = {p["provider"] for p in providers}
-    assert names == {"google", "microsoft", "apple"}
+    assert names == {"google", "microsoft", "apple", "github"}
     by_name = {p["provider"]: p for p in providers}
     assert by_name["google"]["enabled"] is True
     assert by_name["microsoft"]["enabled"] is True
     assert by_name["apple"]["enabled"] is False
+    assert by_name["github"]["enabled"] is False
 
 
 # ── superuser guards ──────────────────────────────────────────────────────────

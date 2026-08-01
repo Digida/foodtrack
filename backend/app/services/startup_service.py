@@ -256,6 +256,7 @@ async def _run_seeding() -> None:
     ss["status"] = "running"
 
     try:
+        await _seed_rbac()
         await _seed_taxonomy_and_items()
         await _seed_collections()
         await _seed_users()
@@ -268,6 +269,29 @@ async def _run_seeding() -> None:
         ss["status"] = "error"
         ss["detail"] = str(exc)
         raise
+
+
+# ── RBAC seeding ──────────────────────────────────────────────────────────
+
+async def _seed_rbac() -> None:
+    """Idempotently seed the permission catalog + system roles (see
+    rbac_service.seed_system_rbac). Must run before user seeding so seeded
+    accounts could be given extra roles."""
+    from app.services.rbac_service import seed_system_rbac
+
+    sec = _state["seeding"]["sections"]["rbac"] = {
+        "status":   "pending",
+        "expected": 0,
+        "seeded":   0,
+        "missing":  0,
+    }
+    async with async_session() as db:
+        result = await seed_system_rbac(db)
+    sec["expected"] = result["permissions"] + result["roles"]
+    sec["seeded"]   = result["permissions"] + result["roles"]
+    sec["missing"]  = 0
+    sec["status"]   = "done"
+    logger.info({"msg": "RBAC roles + permissions seeded", **result})
 
 
 # ── Taxonomy / item seeding ───────────────────────────────────────────────────

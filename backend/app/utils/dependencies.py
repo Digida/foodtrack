@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.tenant import Tenant
 from app.services.auth_service import decode_access_token, hash_password
+from app.services.rbac_service import get_user_permissions
 
 # auto_error=False makes HTTPBearer return None instead of raising 403
 # when the Authorization header is absent. We raise 401 ourselves.
@@ -97,25 +98,45 @@ async def get_current_tenant(
     return tenant
 
 
-async def require_admin(user: User = Depends(get_current_user)) -> User:
-    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN):
+async def require_admin(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> User:
+    """RBAC-backed admin gate — requires the `users.manage` permission
+    (granted to admins and superusers by the default role matrix)."""
+    perms = await get_user_permissions(db, user)
+    if "users.manage" not in perms:
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
 
-async def require_superuser(user: User = Depends(get_current_user)) -> User:
-    if user.role != UserRole.SUPERUSER:
+async def require_superuser(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> User:
+    perms = await get_user_permissions(db, user)
+    if "system.admin" not in perms:
         raise HTTPException(status_code=403, detail="Superuser access required")
     return user
 
 
-async def require_enterprise_or_admin(user: User = Depends(get_current_user)) -> User:
-    if user.role not in (UserRole.SUPERUSER, UserRole.ADMIN, UserRole.ENTERPRISE):
+async def require_enterprise_or_admin(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> User:
+    perms = await get_user_permissions(db, user)
+    if "enterprise.access" not in perms:
         raise HTTPException(status_code=403, detail="Enterprise or Admin access required")
     return user
 
 
-async def require_verifier_or_above(user: User = Depends(get_current_user)) -> User:
-    if user.role in (UserRole.VIEWER,):
+async def require_verifier_or_above(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> User:
+    """Operation-capable gate — blocks read-only VIEWER accounts (and the
+    anonymous system user). Grants access to clerks, verifiers, couriers,
+    auditors, government agents, enterprises, admins and superusers."""
+    perms = await get_user_permissions(db, user)
+    if "operations.access" not in perms:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     return user
+
+
+def require_permission(code: str):
+    """Dependency factory — require a specific permission, e.g.
+    `Depends(require_permission("certificates.approve"))`."""
+    async def _check(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> User:
+        perms = await get_user_permissions(db, user)
+        if code not in perms:
+            raise HTTPException(status_code=403, detail=f"Permission required: {code}")
+        return user
+    return _check

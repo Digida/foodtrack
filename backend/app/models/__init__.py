@@ -1,5 +1,6 @@
 from app.models.tenant import Tenant
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, UserType
+from app.models.rbac import Role, Permission, RefreshToken, role_permissions, user_roles
 from app.models.product import Product, ProductCategory
 from app.models.certificate import Certificate, CertificateStatus, CertificateType, CertificateRequest, CertificateRequestStatus
 from app.models.traceability import TraceabilityEvent, EventType
@@ -35,7 +36,8 @@ from app.models.commerce import (
 
 __all__ = [
     "Tenant",
-    "User", "UserRole",
+    "User", "UserRole", "UserType",
+    "Role", "Permission", "RefreshToken", "role_permissions", "user_roles",
     "Product", "ProductCategory",
     "Certificate", "CertificateStatus", "CertificateType",
     "CertificateRequest", "CertificateRequestStatus",

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1a6b3c">
+<title>Signing you in — FoodTrack</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body style="display:flex;align-items:center;justify-content:center;min-height:100vh">
+<div class="auth-container" style="width:100%">
+  <div class="auth-card" style="text-align:center">
+    <div class="logo">Food<span>Track</span></div>
+    <div id="sso-status">Completing sign-in…</div>
+    <a id="sso-back" href="/#login" style="display:none;margin-top:16px" class="btn btn-outline btn-block">Back to Login</a>
+  </div>
+</div>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+(function () {
+  var status = document.getElementById('sso-status');
+  var back = document.getElementById('sso-back');
+  try {
+    if (Auth.completeSsoTokens()) {
+      status.textContent = 'Sign-in successful — redirecting…';
+    } else {
+      status.textContent = 'Missing sign-in credentials. Please log in again.';
+      back.style.display = 'block';
+    }
+  } catch (e) {
+    status.textContent = 'Sign-in failed: ' + (e.message || 'Unable to complete sign-in');
+    back.style.display = 'block';
+  }
+})();
+</script>
+</body>
+</html>

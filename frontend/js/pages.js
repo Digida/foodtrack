@@ -355,33 +355,24 @@ Pages.login = (app) => {
       Auth.getSsoProviders().then(providers => {
         const box = document.getElementById('sso-buttons');
         if (!box) return;
-        const enabled = providers.filter(p => p.enabled && p.client_id);
+        const enabled = providers.filter(p => p.enabled);
         if (enabled.length === 0) {
           box.innerHTML = '<p class="sso-note">SSO is not configured yet — enter the account details provided by FoodTrack.</p>';
           return;
         }
         box.innerHTML = enabled.map(p => `
           <button class="btn btn-outline btn-block sso-btn" data-provider="${p.provider}">
-            ${p.provider === 'google' ? 'G' : 'M'} · ${p.provider.charAt(0).toUpperCase() + p.provider.slice(1)}
+            ${p.provider.charAt(0).toUpperCase() + p.provider.slice(1)}
           </button>`).join('');
         box.querySelectorAll('.sso-btn').forEach(btn => {
-          btn.addEventListener('click', () => {
-            const p = btn.dataset.provider;
-            const provider = enabled.find(x => x.provider === p);
-            const redirectUri = provider.redirect_uri || window.location.origin + '/login.html?provider=' + p;
-            let url = '';
-            if (p === 'google') {
-              url = 'https://accounts.google.com/o/oauth2/v2/auth?client_id=' +
-                encodeURIComponent(provider.client_id) +
-                '&redirect_uri=' + encodeURIComponent(redirectUri) +
-                '&response_type=token&scope=openid%20email%20profile';
-            } else if (p === 'microsoft') {
-              url = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=' +
-                encodeURIComponent(provider.client_id) +
-                '&redirect_uri=' + encodeURIComponent(redirectUri) +
-                '&response_type=token&scope=openid%20email%20profile';
+          btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            try {
+              await Auth.ssoAuthorize(btn.dataset.provider);
+            } catch (e) {
+              UI.showError(e.message || 'SSO authorization failed');
+              btn.disabled = false;
             }
-            if (url) window.location.href = url;
           });
         });
       });

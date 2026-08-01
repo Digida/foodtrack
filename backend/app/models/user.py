@@ -13,6 +13,26 @@ class UserRole(str, enum.Enum):
     ENTERPRISE = "enterprise"
     VERIFIER = "verifier"
     VIEWER = "viewer"
+    CLERK = "clerk"
+    COURIER = "courier"
+    AUDITOR = "auditor"
+    GOVERNMENT_AGENT = "government_agent"
+
+
+class UserType(str, enum.Enum):
+    """Account category — who the user is, orthogonal to what they can do (roles).
+
+    - ORGANIZATION: company accounts (admins, enterprise buyers, staff)
+    - OPERATIONS:    field operators on the ground (clerks, verifiers, couriers)
+    - GOVERNMENT:    regulator / customs / municipality accounts
+    - CONSUMER:      public portal accounts (scan-and-verify)
+    - SYSTEM:        internal platform / system accounts
+    """
+    ORGANIZATION = "organization"
+    OPERATIONS = "operations"
+    GOVERNMENT = "government"
+    CONSUMER = "consumer"
+    SYSTEM = "system"
 
 
 class User(Base):
@@ -24,6 +44,7 @@ class User(Base):
     full_name = Column(String(255), nullable=False)
     company = Column(String(255), nullable=True)
     role = Column(SAEnum(UserRole, native_enum=False), default=UserRole.VIEWER, nullable=False)
+    user_type = Column(SAEnum(UserType, native_enum=False), default=UserType.ORGANIZATION, nullable=False)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     hashed_password = Column(String(255), nullable=False)
     # Secondary contact details (used for e.g. alternate email / alternate phone)
@@ -45,3 +66,7 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     tenant = relationship("Tenant", back_populates="users")
+    # Additional roles beyond the primary `role` column (RBAC). Always eagerly
+    # loaded so sync accessors (e.g. serialize_user) never trigger lazy loads.
+    roles = relationship("Role", secondary="user_roles", lazy="selectin")
+    refresh_tokens = relationship("RefreshToken", back_populates="user", lazy="select")
