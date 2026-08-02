@@ -469,10 +469,13 @@ Comprehensive test coverage with service, route, and tool tests.
   - [`test_cargo_service.py`](backend/tests/test_services/test_cargo_service.py) — 8 tests: registration, detail, listing, status transitions, cert status
   - [`test_recall_service.py`](backend/tests/test_services/test_recall_service.py) — 7 tests: initiate, detail, status update, trace, listing
   - [`test_monitoring_service.py`](backend/tests/test_services/test_monitoring_service.py) — 7 tests: health, metrics, SLA dashboard, request recording
+  - [`test_rbac_service.py`](backend/tests/test_services/test_rbac_service.py) — 24 tests: permission matrices, has_permission, user_role_codes, seed idempotency, role assignment guards, set_user_type, custom-role CRUD
+  - [`test_refresh_tokens.py`](backend/tests/test_services/test_refresh_tokens.py) — 7 tests: issue/rotate/revoke/reuse-rejection
 - ✅ [`backend/tests/test_routes/`](backend/tests/test_routes/) — **API integration tests**:
   - [`test_health.py`](backend/tests/test_routes/test_health.py) — health, metrics, SLA endpoints
   - [`test_certificates.py`](backend/tests/test_routes/test_certificates.py) — 5 tests: issue, list, get, notify-expiring, request flow
   - [`test_cargo.py`](backend/tests/test_routes/test_cargo.py) — 5 tests: register, detail, by-item, status update, cert status
+  - [`test_developer_portal.py`](backend/tests/test_routes/test_developer_portal.py) — 4 tests: API-key email notification (default dev email, custom recipient, unconfigured, failure)
 - ✅ [`backend/tests/test_tools/`](backend/tests/test_tools/) — **tool unit tests**:
   - [`test_barcode_tool.py`](backend/tests/test_tools/test_barcode_tool.py) — 8 tests: EAN-13 validation, generation, checksum, prefix
 - ✅ CI gate: `pytest --cov=backend --cov-fail-under=70` in CI workflow
@@ -551,8 +554,17 @@ Developer portal with API key management, rate limiting, and middleware — full
 
 **Routes — `backend/app/routes/developer_portal.py`** (registered in main.py):
 - ✅ `POST /api/v1/developer/api-keys` — generate new API key (returns raw key once)
+- ✅ `POST /api/v1/developer/api-keys` — **auto-emails the raw key** to `DEV_EMAIL` (default `digikiminvest@gmail.com`) or an explicit `notify_email` on creation; best-effort delivery via `EMAIL_API_URL` (Resend-style) → SMTP fallback (`SMTP_*` settings), never blocks/fails the request. Response reports `email_to` + `email_status` (`not_configured`/`sent`/`failed`)
 - ✅ `GET /api/v1/developer/api-keys` — list API keys (prefix only, no hash exposure)
 - ✅ `DELETE /api/v1/developer/api-keys/{id}` — revoke API key
+
+**Email — `backend/app/services/email_service.py`:**
+- ✅ `send_email(to, subject, body)` — Resend-style HTTP API first, SMTP (`smtplib` + STARTTLS) fallback; never raises
+- ✅ `email_configured()` — whether any outbound transport is set
+
+**Dev contact / credits (frontend):**
+- ✅ Public footer credits: `mailto:digikiminvest@gmail.com`, `tel:+256700677543`, `https://wa.me/256700677543` (`frontend/js/components.js` publicLayout)
+- ✅ `Pages.contact` split into **Platform** (contact form → `POST /contact`, stored in `contact_messages`) and **Developer** cards (email + WhatsApp deep links + phone) in `frontend/js/pages.js`
 
 **Auto-docs:**
 - ✅ Swagger UI at `/docs` — built-in FastAPI

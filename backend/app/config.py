@@ -26,6 +26,18 @@ class Settings:
     SMS_API_URL: str = os.getenv("SMS_API_URL", "")
     SMS_API_KEY: str = os.getenv("SMS_API_KEY", "")
 
+    # SMTP fallback for transactional email (used when EMAIL_API_URL is empty)
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER: str = os.getenv("SMTP_USER", "")
+    SMTP_PASS: str = os.getenv("SMTP_PASS", "")
+    SMTP_SENDER: str = os.getenv("SMTP_SENDER", "noreply@foodtrack.ae")
+
+    # Developer / operations contact (API-key notifications, footer credits)
+    DEV_EMAIL: str = os.getenv("DEV_EMAIL", "digikiminvest@gmail.com")
+    DEV_PHONE: str = os.getenv("DEV_PHONE", "+256700677543")
+    DEV_WHATSAPP: str = os.getenv("DEV_WHATSAPP", "+256700677543")
+
     # SSO client identifiers (used by the frontend OAuth flows)
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")

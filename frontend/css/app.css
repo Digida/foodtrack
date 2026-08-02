@@ -99,6 +99,9 @@ body {
   padding: 24px 32px; margin-top: auto;
 }
 .footer-inner { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--text-light); }
+.footer-credits { margin-top: 4px; }
+.footer-credits a { color: var(--text-light); text-decoration: none; border-bottom: 1px dotted var(--text-light); }
+.footer-credits a:hover { color: var(--primary); border-color: var(--primary); }
 .footer-links { display: flex; gap: 16px; }
 .footer-links a { color: var(--text-light); text-decoration: none; }
 .footer-links a:hover { color: var(--primary); }
@@ -267,6 +270,8 @@ a:hover { text-decoration: underline; }
 .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
 .btn-danger { background: var(--danger); color: var(--text-inverse); }
 .btn-danger:hover { background: #c82333; }
+.btn-success { background: #1da851; color: var(--text-inverse); }
+.btn-success:hover { background: #17a04a; }
 .btn-sm { padding: 6px 12px; font-size: 12px; }
 .btn-lg { padding: 14px 32px; font-size: 16px; }
 .btn-block { width: 100%; }

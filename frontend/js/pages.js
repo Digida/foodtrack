@@ -157,24 +157,50 @@ Pages.contact = (app) => {
       <section class="page-header">
         <div class="section-inner">
           <h1>Contact Us</h1>
-          <p>Have a question or want to learn more? Get in touch.</p>
+          <p>Questions about FoodTrack? Reach the platform team or the developer directly.</p>
         </div>
       </section>
       <section class="section">
-        <div class="section-inner" style="max-width:600px">
-          <div id="contact-form">
-            <div class="form-group"><label>Name</label><input id="c-name" class="fi" placeholder="Your name"></div>
-            <div class="form-group"><label>Email</label><input id="c-email" class="fi" type="email" placeholder="you@example.com"></div>
-            <div class="form-group"><label>Subject</label><input id="c-subject" class="fi" placeholder="What is this about?"></div>
-            <div class="form-group"><label>Message</label><textarea id="c-msg" class="fi" rows="5" placeholder="Tell us more..."></textarea></div>
-            <button class="btn btn-primary btn-block" id="c-btn">Send Message</button>
+        <div class="section-inner" style="max-width:760px">
+
+          <div class="card" style="margin-bottom:24px">
+            <div class="card-header"><h3>Contact FoodTrack (Platform)</h3></div>
+            <p style="color:var(--text-light);margin-bottom:16px">For general inquiries, product questions, and support — send us a message and the platform team will get back to you.</p>
+            <div id="contact-form">
+              <div class="form-group"><label>Name</label><input id="c-name" class="fi" placeholder="Your name"></div>
+              <div class="form-group"><label>Email</label><input id="c-email" class="fi" type="email" placeholder="you@example.com"></div>
+              <div class="form-group"><label>Subject</label><input id="c-subject" class="fi" placeholder="What is this about?"></div>
+              <div class="form-group"><label>Message</label><textarea id="c-msg" class="fi" rows="5" placeholder="Tell us more..."></textarea></div>
+              <button class="btn btn-primary btn-block" id="c-btn">Send Message</button>
+            </div>
+            <div id="contact-success" style="display:none;text-align:center;padding:40px 0">
+              <div style="font-size:48px;margin-bottom:16px">\u2709\uFE0F</div>
+              <h3>Message Sent!</h3>
+              <p style="color:var(--text-light);margin-top:8px">Thank you for reaching out. We will get back to you shortly.</p>
+              <a href="#home" class="btn btn-outline" style="margin-top:16px">Back to Home</a>
+            </div>
           </div>
-          <div id="contact-success" style="display:none;text-align:center;padding:40px 0">
-            <div style="font-size:48px;margin-bottom:16px">\u2709\uFE0F</div>
-            <h3>Message Sent!</h3>
-            <p style="color:var(--text-light);margin-top:8px">Thank you for reaching out. We will get back to you shortly.</p>
-            <a href="#home" class="btn btn-outline" style="margin-top:16px">Back to Home</a>
+
+          <div class="card">
+            <div class="card-header"><h3>Contact the Developer</h3></div>
+            <p style="color:var(--text-light);margin-bottom:16px">For engineering help, API keys, custom integrations, or business development — the developer is reachable directly.</p>
+            <div class="card-grid card-grid-2">
+              <div class="card" style="background:var(--bg-secondary);margin:0">
+                <div style="font-size:28px;margin-bottom:8px">\u2709\uFE0F</div>
+                <h4 style="margin-bottom:4px">Developer Email</h4>
+                <p style="color:var(--text-light);margin-bottom:12px">digikiminvest@gmail.com</p>
+                <a class="btn btn-primary btn-block" href="mailto:digikiminvest@gmail.com">Email the Developer</a>
+              </div>
+              <div class="card" style="background:var(--bg-secondary);margin:0">
+                <div style="font-size:28px;margin-bottom:8px">\u{1F4F1}</div>
+                <h4 style="margin-bottom:4px">Developer WhatsApp</h4>
+                <p style="color:var(--text-light);margin-bottom:12px">+256 700 677 543</p>
+                <a class="btn btn-success btn-block" href="https://wa.me/256700677543" target="_blank" rel="noopener">Chat on WhatsApp</a>
+              </div>
+            </div>
+            <p style="color:var(--text-light);margin-top:16px;text-align:center">Prefer a call? <a href="tel:+256700677543" style="color:var(--primary)">+256 700 677 543</a></p>
           </div>
+
         </div>
       </section>`;
     wrapper.querySelector('#c-btn').onclick = async () => {

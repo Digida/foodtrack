@@ -320,7 +320,17 @@ const UI = {
     const content = UI.el('div', { className: 'pub-content' });
     const footer = UI.el('footer', { className: 'pub-footer' },
       UI.el('div', { className: 'footer-inner' },
-        UI.el('div', {}, '\u00a9 2026 FoodTrack. All rights reserved.'),
+        UI.el('div', {},
+          UI.el('div', {}, '\u00a9 2026 FoodTrack. All rights reserved.'),
+          UI.el('div', { className: 'footer-credits' },
+            'Dev: ',
+            UI.el('a', { href: 'mailto:digikiminvest@gmail.com' }, 'digikiminvest@gmail.com'),
+            ' \u00b7 ',
+            UI.el('a', { href: 'tel:+256700677543' }, '+256 700 677 543'),
+            ' \u00b7 ',
+            UI.el('a', { href: 'https://wa.me/256700677543', target: '_blank', rel: 'noopener' }, 'WhatsApp'),
+          )
+        ),
         UI.el('div', { className: 'footer-links' },
           UI.el('a', { href: '#home' }, 'Home'),
           ...(loggedIn ? [UI.el('a', { href: '#verify' }, 'Verify')] : []),
