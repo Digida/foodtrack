@@ -92,6 +92,28 @@ body {
 .pub-auth { display: flex; gap: 8px; align-items: center; }
 .pub-toggle { display: none; background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text); padding: 4px; margin-left: auto; line-height: 1; }
 
+/* ─── LANGUAGE SWITCHER ─────────────────────── */
+.lang-switch {
+  background: none; border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text-light); font-size: 12px; font-weight: 600; padding: 5px 10px;
+  cursor: pointer; transition: all 0.2s; white-space: nowrap;
+}
+.lang-switch:hover { color: var(--primary); border-color: var(--primary); background: rgba(26,107,60,0.08); }
+.topbar-lang { flex-shrink: 0; }
+
+/* RTL — Arabic */
+[dir="rtl"] .pub-links { flex-direction: row; }
+[dir="rtl"] .footer-inner { flex-direction: row-reverse; }
+[dir="rtl"] .sidebar-nav { padding-left: 0; padding-right: 8px; }
+[dir="rtl"] .pub-toggle { margin-left: 0; margin-right: auto; }
+[dir="rtl"] .footer-links { flex-direction: row; }
+[dir="rtl"] .topbar h2 { text-align: right; }
+[dir="rtl"] .hero { direction: rtl; }
+[dir="rtl"] .hero-actions { justify-content: center; }
+[dir="rtl"] .card-header, [dir="rtl"] .modal-actions { flex-direction: row-reverse; }
+[dir="rtl"] .form-group label { text-align: right; }
+[dir="rtl"] .pub-link { text-align: right; }
+
 .pub-content { flex: 1; }
 
 .pub-footer {
@@ -173,6 +195,7 @@ body {
   .pub-nav { gap: 12px; }
   .pub-nav .autocomplete-wrap { display: none !important; }
   .pub-auth { margin-left: auto; }
+  [dir="rtl"] .pub-auth { margin-left: 0; margin-right: auto; }
   .pub-toggle { display: flex; align-items: center; justify-content: center; }
   .pub-links {
     display: none; flex-direction: column; position: absolute; top: var(--nav-height);

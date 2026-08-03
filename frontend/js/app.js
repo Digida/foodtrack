@@ -1,6 +1,9 @@
 (function () {
   if (localStorage.getItem('ft_dark') === '1') document.body.classList.add('dark');
 
+  // Apply saved language + RTL direction
+  if (window.I18n) I18n.init();
+
   // Init SEO defaults
   if (window.SEO) SEO.reset();
 
@@ -143,4 +146,7 @@
   }
 
   Router.init();
+
+  // Re-render the current page when the language changes
+  window.addEventListener('ft:langchange', () => Router.resolve());
 })();

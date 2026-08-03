@@ -32,93 +32,96 @@ function _buildModeSvg(mode) {
 // ─── LANDING PAGE ─────────────────────────────────────────────
 
 Pages.home = (app) => {
-  app.appendChild(UI.publicLayout(() => {
+  const renderHome = () => {
+    const t = I18n.t;
     const wrapper = document.createElement('div');
     wrapper.innerHTML = `
       <section class="hero">
         <div class="hero-content">
-          <h1>Digital Trust for<br>Your Food Supply Chain</h1>
-          <p class="hero-sub">Blockchain-powered traceability, smart certification, investor bulking with escrow — built for the agrifood industry.</p>
+          <h1>${t('home.title')}</h1>
+          <p class="hero-sub">${t('home.subtitle')}</p>
           <div class="hero-actions">
-            <a href="#login" class="btn btn-primary btn-lg">Get Started</a>
-            <a href="#bulking" class="btn btn-outline btn-lg">Bulk & Invest</a>
-            <a href="#about" class="btn btn-outline btn-lg">Learn More</a>
+            <a href="#login" class="btn btn-primary btn-lg">${t('home.get-started')}</a>
+            <a href="#bulking" class="btn btn-outline btn-lg">${t('home.bulk-invest')}</a>
+            <a href="#about" class="btn btn-outline btn-lg">${t('home.learn-more')}</a>
           </div>
           <div class="hero-stats">
-            <div class="hero-stat"><span class="hs-num">10,000+</span><span class="hs-label">Products Traced</span></div>
-            <div class="hero-stat"><span class="hs-num">5,000+</span><span class="hs-label">Certificates Issued</span></div>
-            <div class="hero-stat"><span class="hs-num">50+</span><span class="hs-label">Countries</span></div>
+            <div class="hero-stat"><span class="hs-num">10,000+</span><span class="hs-label">${t('home.stat-products')}</span></div>
+            <div class="hero-stat"><span class="hs-num">5,000+</span><span class="hs-label">${t('home.stat-certs')}</span></div>
+            <div class="hero-stat"><span class="hs-num">50+</span><span class="hs-label">${t('home.stat-countries')}</span></div>
           </div>
         </div>
       </section>
       <section class="section features">
         <div class="section-inner">
-          <h2>Everything You Need</h2>
-          <p class="section-sub">From farm to fork, FoodTrack gives you full visibility and control.</p>
+          <h2>${t('home.features-title')}</h2>
+          <p class="section-sub">${t('home.features-sub')}</p>
           <div class="features-grid">
             <div class="feature-card">
               <div class="feature-icon">\u{1F50D}</div>
-              <h3>Traceability</h3>
-              <p>End-to-end supply chain tracking with immutable event timelines. Scan, log, and follow every step.</p>
+              <h3>${t('home.feature-traceability')}</h3>
+              <p>${t('home.feature-traceability-desc')}</p>
             </div>
             <div class="feature-card">
               <div class="feature-icon">\u{1F4DC}</div>
-              <h3>Smart Certifications</h3>
-              <p>Issue and verify digital certificates — Origin, Organic, Halal, Safety, and more — with one click.</p>
+              <h3>${t('home.feature-certs')}</h3>
+              <p>${t('home.feature-certs-desc')}</p>
             </div>
             <div class="feature-card">
               <div class="feature-icon">\u{1F4CA}</div>
-              <h3>Analytics & Reports</h3>
-              <p>Real-time dashboards, category breakdowns, and CSV exports to inform your decisions.</p>
+              <h3>${t('home.feature-analytics')}</h3>
+              <p>${t('home.feature-analytics-desc')}</p>
             </div>
             <div class="feature-card">
               <div class="feature-icon">\u{1F4E4}</div>
-              <h3>Share & Compare</h3>
-              <p>Generate shareable product links, QR codes, and peer benchmarking for buyer confidence.</p>
+              <h3>${t('home.feature-share')}</h3>
+              <p>${t('home.feature-share-desc')}</p>
             </div>
             <div class="feature-card">
               <div class="feature-icon">\u{1F9F1}</div>
-              <h3>QR & Barcode Scanner</h3>
-              <p>Native camera scanning with automatic fallback. Decode and look up products in seconds.</p>
+              <h3>${t('home.feature-scanner')}</h3>
+              <p>${t('home.feature-scanner-desc')}</p>
             </div>
             <div class="feature-card">
               <div class="feature-icon">\u{1F512}</div>
-              <h3>Secure & Compliant</h3>
-              <p>Multi-factor authentication, role-based access, and audit-ready data for regulatory compliance.</p>
+              <h3>${t('home.feature-secure')}</h3>
+              <p>${t('home.feature-secure-desc')}</p>
             </div>
             <div class="feature-card">
               <div class="feature-icon">\u{1F4B0}</div>
-              <h3>Investor Bulking & Escrow</h3>
-              <p>Register commodity demand, collect farmer supply, and lock deals with escrow-backed deposits — released only when the buyer receives the goods.</p>
+              <h3>${t('home.feature-escrow')}</h3>
+              <p>${t('home.feature-escrow-desc')}</p>
             </div>
             <div class="feature-card">
               <div class="feature-icon">\u{1F9ED}</div>
-              <h3>Member Job Pipeline</h3>
-              <p>Assign clerks, verifiers, packers, certifiers, and couriers to each register, with independent certification across company lines.</p>
+              <h3>${t('home.feature-jobs')}</h3>
+              <p>${t('home.feature-jobs-desc')}</p>
             </div>
           </div>
         </div>
       </section>
       <section class="section how-it-works" style="background:var(--bg-card)">
         <div class="section-inner">
-          <h2>How It Works</h2>
-          <p class="section-sub">Three simple steps to full supply chain integrity.</p>
+          <h2>${t('home.how-title')}</h2>
+          <p class="section-sub">${t('home.how-sub')}</p>
           <div class="steps">
-            <div class="step"><div class="step-num">1</div><h3>Register & Onboard</h3><p>Create your account, set up your company profile, and start adding products to the platform.</p></div>
-            <div class="step"><div class="step-num">2</div><h3>Track & Certify</h3><p>Log supply chain events, issue digital certificates, and generate traceability records for every product.</p></div>
-            <div class="step"><div class="step-num">3</div><h3>Bulk & Escrow</h3><p>Register commodity demand, accept farmer bids, and deposit escrow — then release it to the seller once the buyer receives the goods.</p></div>
+            <div class="step"><div class="step-num">1</div><h3>${t('home.step1-title')}</h3><p>${t('home.step1-desc')}</p></div>
+            <div class="step"><div class="step-num">2</div><h3>${t('home.step2-title')}</h3><p>${t('home.step2-desc')}</p></div>
+            <div class="step"><div class="step-num">3</div><h3>${t('home.step3-title')}</h3><p>${t('home.step3-desc')}</p></div>
           </div>
         </div>
       </section>
       <section class="section cta">
         <div class="section-inner">
-          <h2>Ready to Build Trust in Your Supply Chain?</h2>
-          <p>Join thousands of producers, certifiers, and buyers using FoodTrack every day.</p>
-          <a href="#login" class="btn btn-primary btn-lg">Get Started Free</a>
+          <h2>${t('home.cta-title')}</h2>
+          <p>${t('home.cta-desc')}</p>
+          <a href="#login" class="btn btn-primary btn-lg">${t('home.cta-button')}</a>
         </div>
       </section>`;
     return wrapper;
-  }));
+  };
+
+  app.appendChild(UI.publicLayout(() => renderHome()));
 };
 
 // ─── ABOUT PAGE ────────────────────────────────────────────────
@@ -2005,10 +2008,9 @@ Pages.bulkCreateRegister = () => {
     <div class="form-group"><label>Title</label><input id="bq-title" class="fi" placeholder="Optional title"></div>
     <div class="form-group"><label>Notes</label><textarea id="bq-notes" class="fi" rows="2"></textarea></div>
   `);
-  setTimeout(() => {
-    const input = document.getElementById('bq-item-search');
-    const dd = document.getElementById('bq-item-dd');
-    if (!input || !dd) return;
+  const input = document.getElementById('bq-item-search');
+  const dd = document.getElementById('bq-item-dd');
+  if (input && dd) {
     let t = null;
     input.addEventListener('input', () => {
       clearTimeout(t);
@@ -2032,7 +2034,7 @@ Pages.bulkCreateRegister = () => {
       input.value = it.textContent;
       dd.innerHTML = ''; dd.classList.remove('open');
     });
-  }, 50);
+  }
   m.actions.appendChild(UI.btn('Create', 'btn-primary', async () => {
     if (!state.id) { UI.showError('Select an item first'); return; }
     const qty = _bulkNum(document.getElementById('bq-qty').value);

@@ -5,6 +5,7 @@ async function api(method, path, body = null, retried = false) {
   const token = localStorage.getItem('ft_token');
   if (token) headers['Authorization'] = `Bearer ${token}`;
   if (body) headers['Content-Type'] = 'application/json';
+  if (window.I18n) headers['Accept-Language'] = I18n.acceptLanguageHeader();
   try {
     const res = await fetch(`${API_BASE}${path}`, { method, headers, body: body ? JSON.stringify(body) : null });
     const data = await res.json().catch(() => ({}));

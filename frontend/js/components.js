@@ -228,32 +228,34 @@ const UI = {
   },
 
   buildMainNav: () => {
+    const t = I18n.t;
     const curHash = window.location.hash || '#home';
     const loggedIn = Auth.isLoggedIn();
     const isActive = (href) => curHash === href ? 'active' : '';
     const toggle = UI.el('button', { className: 'pub-toggle', html: '&#9776;' });
-    const searchInput = UI.autocompleteSearchInput('Search items, products, batches...', '#search');
+    const searchInput = UI.autocompleteSearchInput(t('nav.search'), '#search');
     searchInput.querySelector('input').style.padding = '6px 12px';
     searchInput.querySelector('input').style.fontSize = '13px';
     const nav = UI.el('nav', { className: 'pub-nav' },
       UI.el('a', { href: '#home', className: 'pub-logo' }, 'Food', UI.el('span', {}, 'Track')),
       UI.el('div', { className: 'pub-links' },
-        UI.el('a', { href: '#home', className: 'pub-link ' + isActive('#home') }, 'Home'),
-        UI.el('a', { href: '#bulking', className: 'pub-link ' + (curHash.startsWith('#bulking') ? 'active' : '') }, 'Bulking'),
-        UI.el('a', { href: '#food-items', className: 'pub-link ' + (curHash.startsWith('#food-items') || curHash.startsWith('#food-item') ? 'active' : '') }, 'Food Items'),
+        UI.el('a', { href: '#home', className: 'pub-link ' + isActive('#home') }, t('nav.home')),
+        UI.el('a', { href: '#bulking', className: 'pub-link ' + (curHash.startsWith('#bulking') ? 'active' : '') }, t('nav.bulking')),
+        UI.el('a', { href: '#food-items', className: 'pub-link ' + (curHash.startsWith('#food-items') || curHash.startsWith('#food-item') ? 'active' : '') }, t('nav.food-items')),
         ...(loggedIn ? [
-          UI.el('a', { href: '#verify', className: 'pub-link ' + isActive('#verify') }, 'Verify'),
-          UI.el('a', { href: '#cargo-tracking', className: 'pub-link ' + (curHash.startsWith('#cargo-tracking') ? 'active' : '') }, 'Cargo Tracking'),
+          UI.el('a', { href: '#verify', className: 'pub-link ' + isActive('#verify') }, t('nav.verify')),
+          UI.el('a', { href: '#cargo-tracking', className: 'pub-link ' + (curHash.startsWith('#cargo-tracking') ? 'active' : '') }, t('nav.cargo-tracking')),
         ] : []),
-        UI.el('a', { href: '#about', className: 'pub-link ' + isActive('#about') }, 'About'),
-        UI.el('a', { href: '#contact', className: 'pub-link ' + isActive('#contact') }, 'Contact'),
+        UI.el('a', { href: '#about', className: 'pub-link ' + isActive('#about') }, t('nav.about')),
+        UI.el('a', { href: '#contact', className: 'pub-link ' + isActive('#contact') }, t('nav.contact')),
       ),
       searchInput,
       UI.el('div', { className: 'pub-auth' },
+        I18n.langSwitcher(),
         loggedIn
-          ? UI.btn('Dashboard', 'btn-primary btn-sm', () => Router.navigate('#dashboard'))
-          : [UI.btn('Login', 'btn-outline btn-sm', () => Router.navigate('#login')),
-             UI.btn('Get Started', 'btn-primary btn-sm', () => Router.navigate('#login'))]
+          ? UI.btn(t('nav.dashboard'), 'btn-primary btn-sm', () => Router.navigate('#dashboard'))
+          : [UI.btn(t('nav.login'), 'btn-outline btn-sm', () => Router.navigate('#login')),
+             UI.btn(t('nav.get-started'), 'btn-primary btn-sm', () => Router.navigate('#login'))]
       ),
       toggle
     );
@@ -271,25 +273,26 @@ const UI = {
   },
 
   buildSidebar: () => {
+    const t = I18n.t;
     const user = Auth.getUser();
     const loggedIn = Auth.isLoggedIn();
     const nav = [
-      { icon: '\u{1F4CA}', label: 'Dashboard', href: '#dashboard' },
-      { icon: '\u{1F69B}', label: 'Bulking', href: '#bulking' },
-      { icon: '\u{1F50D}', label: 'Search', href: '#search' },
-      { icon: '\u{1F33E}', label: 'Food Items', href: '#food-items' },
-      { icon: '\u{1F4E6}', label: 'Products', href: '#products' },
-      { icon: '\u{1F50D}', label: 'Traceability', href: '#traceability' },
-      { icon: '\u{1F4DC}', label: 'Certificates', href: '#certificates' },
-      { icon: '\u{1F4C8}', label: 'Analytics', href: '#analytics' },
-      { icon: '\u{1F4E4}', label: 'Share', href: '#share' },
-      { icon: '\u{1FAB4}', label: 'Taxonomy', href: '#taxonomy' },
-      { icon: '\u{1F9F1}', label: 'Batches', href: '#batches', loginOnly: true },
-      { icon: '\u{1F3E2}', label: 'Warehouses', href: '#warehouses' },
-      { icon: '\u{1F6A2}', label: 'Shipments', href: '#shipments' },
-      { icon: '\u{1F69A}', label: 'Cargo Tracking', href: '#cargo-tracking', loginOnly: true },
-      { icon: '\u{1F4E6}', label: 'Collections', href: '#collections' },
-      { icon: '\u{2699}\uFE0F', label: 'Settings', href: '#settings' },
+      { icon: '\u{1F4CA}', label: t('nav.dashboard'), href: '#dashboard' },
+      { icon: '\u{1F69B}', label: t('nav.bulking'), href: '#bulking' },
+      { icon: '\u{1F50D}', label: t('sidebar.search'), href: '#search' },
+      { icon: '\u{1F33E}', label: t('nav.food-items'), href: '#food-items' },
+      { icon: '\u{1F4E6}', label: t('sidebar.products'), href: '#products' },
+      { icon: '\u{1F50D}', label: t('sidebar.traceability'), href: '#traceability' },
+      { icon: '\u{1F4DC}', label: t('sidebar.certificates'), href: '#certificates' },
+      { icon: '\u{1F4C8}', label: t('sidebar.analytics'), href: '#analytics' },
+      { icon: '\u{1F4E4}', label: t('sidebar.share'), href: '#share' },
+      { icon: '\u{1FAB4}', label: t('sidebar.taxonomy'), href: '#taxonomy' },
+      { icon: '\u{1F9F1}', label: t('sidebar.batches'), href: '#batches', loginOnly: true },
+      { icon: '\u{1F3E2}', label: t('sidebar.warehouses'), href: '#warehouses' },
+      { icon: '\u{1F6A2}', label: t('sidebar.shipments'), href: '#shipments' },
+      { icon: '\u{1F69A}', label: t('nav.cargo-tracking'), href: '#cargo-tracking', loginOnly: true },
+      { icon: '\u{1F4E6}', label: t('sidebar.collections'), href: '#collections' },
+      { icon: '\u{2699}\uFE0F', label: t('sidebar.settings'), href: '#settings' },
     ].filter(item => !item.loginOnly || loggedIn);
     const curHash = window.location.hash;
     const isActive = (href) => curHash.startsWith(href) || (href === '#food-items' && curHash.startsWith('#food-item'));
@@ -307,23 +310,24 @@ const UI = {
         )
       ),
       UI.el('div', { className: 'sidebar-footer' },
-        UI.el('div', { className: 'sidebar-user' }, loggedIn ? (user?.full_name || user?.name || '') : 'Guest'),
+        UI.el('div', { className: 'sidebar-user' }, loggedIn ? (user?.full_name || user?.name || '') : t('sidebar.guest')),
         loggedIn
-          ? UI.btn('Logout', 'btn-outline btn-sm', () => Auth.logout())
-          : UI.btn('Login', 'btn-primary btn-sm', () => Router.navigate('#login'))
+          ? UI.btn(t('nav.logout'), 'btn-outline btn-sm', () => Auth.logout())
+          : UI.btn(t('nav.login'), 'btn-primary btn-sm', () => Router.navigate('#login'))
       )
     );
   },
 
   publicLayout: (bodyFn) => {
+    const t = I18n.t;
     const loggedIn = Auth.isLoggedIn();
     const content = UI.el('div', { className: 'pub-content' });
     const footer = UI.el('footer', { className: 'pub-footer' },
       UI.el('div', { className: 'footer-inner' },
         UI.el('div', {},
-          UI.el('div', {}, '\u00a9 2026 FoodTrack. All rights reserved.'),
+          UI.el('div', {}, t('footer.rights')),
           UI.el('div', { className: 'footer-credits' },
-            'Dev: ',
+            t('footer.dev') + ' ',
             UI.el('a', { href: 'mailto:digikiminvest@gmail.com' }, 'digikiminvest@gmail.com'),
             ' \u00b7 ',
             UI.el('a', { href: 'tel:+256700677543' }, '+256 700 677 543'),
@@ -332,10 +336,10 @@ const UI = {
           )
         ),
         UI.el('div', { className: 'footer-links' },
-          UI.el('a', { href: '#home' }, 'Home'),
-          ...(loggedIn ? [UI.el('a', { href: '#verify' }, 'Verify')] : []),
-          UI.el('a', { href: '#about' }, 'About'),
-          UI.el('a', { href: '#contact' }, 'Contact'),
+          UI.el('a', { href: '#home' }, t('footer.home')),
+          ...(loggedIn ? [UI.el('a', { href: '#verify' }, t('footer.verify'))] : []),
+          UI.el('a', { href: '#about' }, t('footer.about')),
+          UI.el('a', { href: '#contact' }, t('footer.contact')),
         )
       )
     );
@@ -358,6 +362,7 @@ const UI = {
   },
 
   layout: (title, bodyFn) => {
+    const t = I18n.t;
     const toggleSidebar = () => {
       document.querySelector('.sidebar')?.classList.toggle('open');
       document.querySelector('.sidebar-overlay')?.classList.toggle('open');
@@ -366,12 +371,13 @@ const UI = {
       UI.el('button', { className: 'mobile-toggle', html: '&#9776;', onClick: toggleSidebar }),
       UI.el('h2', {}, title || 'FoodTrack'),
       UI.el('div', { id: 'topbar-search', className: 'topbar-actions', style: 'flex:1;max-width:500px;display:flex;gap:6px;align-items:center' },
-        UI.el('div', { style: 'flex:1;min-width:180px' }, UI.autocompleteSearchInput('Quick search items, batches...')),
+        UI.el('div', { style: 'flex:1;min-width:180px' }, UI.autocompleteSearchInput(t('sidebar.quick-search'))),
         UI.btn('\u{1F50D}', 'btn-primary btn-sm', function() {
           const input = document.querySelector('#topbar-search input');
           if (input) { const v = input.value.trim(); if (v) Router.navigate('#search/' + encodeURIComponent(v)); }
         })
       ),
+      UI.el('div', { className: 'topbar-actions topbar-lang' }, I18n.langSwitcher()),
       UI.el('div', { id: 'topbar-actions', className: 'topbar-actions' })
     );
     const pageContent = UI.el('div', { className: 'page-content', id: 'page-content' });
