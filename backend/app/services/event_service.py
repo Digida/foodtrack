@@ -32,7 +32,7 @@ async def publish_event(
     db.add(event_log)
     await db.commit()
 
-    msg = json.dumps({"type": event_type, "channel": channel, "payload": payload, "timestamp": str(datetime.now(timezone.utc))}, default=str)
+    msg = json.dumps({"type": event_type, "channel": channel, "payload": payload, "timestamp": datetime.now(timezone.utc).isoformat()}, default=str)
 
     if channel in _ws_connections:
         stale = []
@@ -122,7 +122,7 @@ async def list_webhooks(db: AsyncSession, user: User) -> list[dict]:
             "url": s.url,
             "events": s.events.split(",") if s.events else [],
             "is_active": s.is_active,
-            "created_at": str(s.created_at) if s.created_at else None,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
         })
     return results
 
@@ -158,7 +158,7 @@ async def list_event_logs(db: AsyncSession, page: int = 1, event_type: str | Non
             "channel": r.channel,
             "payload": json.loads(r.payload_json) if r.payload_json else None,
             "published_by": r.published_by,
-            "created_at": str(r.created_at) if r.created_at else None,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
         })
 
     return {"events": results, "total": total, "page": page, "total_pages": max(1, (total + 20 - 1) // 20)}

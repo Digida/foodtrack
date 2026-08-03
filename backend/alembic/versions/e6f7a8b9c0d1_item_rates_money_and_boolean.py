@@ -28,6 +28,9 @@ def upgrade() -> None:
         "WHERE is_active IS NOT NULL AND is_active NOT IN ('Y', 'y', '1', 'true', 't')"
     )
     if dialect == "postgresql":
+        # PostgreSQL cannot auto-cast the legacy server_default ('Y') to boolean,
+        # so drop it first, then re-add a proper boolean default after the type change.
+        op.execute("ALTER TABLE item_rates ALTER COLUMN is_active DROP DEFAULT")
         with op.batch_alter_table("item_rates", schema=None) as batch_op:
             batch_op.alter_column(
                 "price_per_kg",
@@ -40,6 +43,7 @@ def upgrade() -> None:
                 type_=sa.Boolean(),
                 existing_type=sa.String(1),
                 existing_nullable=True,
+                server_default=sa.text("true"),
                 postgresql_using="is_active::boolean",
             )
     else:
@@ -55,6 +59,7 @@ def upgrade() -> None:
                 type_=sa.Boolean(),
                 existing_type=sa.String(1),
                 existing_nullable=True,
+                server_default=sa.text("1"),
             )
 
 

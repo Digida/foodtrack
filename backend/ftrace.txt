@@ -1,0 +1,50 @@
+Timeout (0:00:30)!
+Thread 0x00002c2c (most recent call first):
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\aiosqlite\core.py", line 115 in run
+  File "D:\anaconda3\Lib\threading.py", line 1043 in _bootstrap_inner
+  File "D:\anaconda3\Lib\threading.py", line 1014 in _bootstrap
+
+Thread 0x000031dc (most recent call first):
+  File "D:\anaconda3\Lib\selectors.py", line 305 in _select
+  File "D:\anaconda3\Lib\selectors.py", line 314 in select
+  File "D:\anaconda3\Lib\asyncio\base_events.py", line 2012 in _run_once
+  File "D:\anaconda3\Lib\asyncio\base_events.py", line 683 in run_forever
+  File "D:\anaconda3\Lib\asyncio\base_events.py", line 712 in run_until_complete
+  File "D:\anaconda3\Lib\asyncio\runners.py", line 118 in run
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\pytest_asyncio\plugin.py", line 407 in _asyncgen_fixture_wrapper
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\_pytest\fixtures.py", line 1005 in call_fixture_func
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\_pytest\fixtures.py", line 1328 in pytest_fixture_setup
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\pluggy\_callers.py", line 121 in _multicall
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\pluggy\_manager.py", line 120 in _hookexec
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\pluggy\_hooks.py", line 512 in __call__
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\_pytest\fixtures.py", line 1232 in execute
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\_pytest\fixtures.py", line 726 in _get_active_fixturedef
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\_pytest\fixtures.py", line 630 in getfixturevalue
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\_pytest\fixtures.py", line 806 in _fillfixtures
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\_pytest\python.py", line 1710 in setup
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\_pytest\runner.py", line 536 in setup
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\_pytest\runner.py", line 170 in pytest_runtest_setup
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\pluggy\_callers.py", line 121 in _multicall
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\pluggy\_manager.py", line 120 in _hookexec
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\pluggy\_hooks.py", line 512 in __call__
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\_pytest\runner.py", line 250 in <lambda>
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\_pytest\runner.py", line 361 in from_call
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\_pytest\runner.py", line 249 in call_and_report
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\_pytest\runner.py", line 132 in runtestprotocol
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\_pytest\runner.py", line 118 in pytest_runtest_protocol
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\pluggy\_callers.py", line 121 in _multicall
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\pluggy\_manager.py", line 120 in _hookexec
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\pluggy\_hooks.py", line 512 in __call__
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\_pytest\main.py", line 408 in pytest_runtestloop
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\pluggy\_callers.py", line 121 in _multicall
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\pluggy\_manager.py", line 120 in _hookexec
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\pluggy\_hooks.py", line 512 in __call__
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\_pytest\main.py", line 384 in _main
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\_pytest\main.py", line 330 in wrap_session
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\_pytest\main.py", line 377 in pytest_cmdline_main
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\pluggy\_callers.py", line 121 in _multicall
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\pluggy\_manager.py", line 120 in _hookexec
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\pluggy\_hooks.py", line 512 in __call__
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\_pytest\config\__init__.py", line 229 in _main
+  File "D:\Work\clients\FoodTrack\.venv\Lib\site-packages\_pytest\config\__init__.py", line 201 in main
+  File "<string>", line 4 in <module>

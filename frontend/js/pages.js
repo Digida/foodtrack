@@ -3330,9 +3330,9 @@ Pages.cargoTrackingDetail = (app, id) => {
       </div>`
     ).join('') || '<p style="color:var(--text-light)">No tracking events</p>';
 
-    const productsHtml = (s.products || []).map(p =>
-      `<div style="display:flex;gap:8px;padding:4px 0"><span class="badge badge-info">${p.product_name}</span><span style="font-size:13px;color:var(--text-light)">SKU: ${p.product_sku} · Batch: ${p.batch_number}</span></div>`
-    ).join('') || '—';
+    const productsHtml = ((s.products || s.batches || []).map(p =>
+      `<div style="display:flex;gap:8px;padding:4px 0"><span class="badge badge-info">${p.product_name || p.product_sku || ''}</span><span style="font-size:13px;color:var(--text-light)">SKU: ${p.product_sku || ''} · Batch: ${p.batch_number || ''}</span></div>`
+    ).filter(p => (p.product_name || p.product_sku)).join('')) || '—';
 
     body.innerHTML = `
       <div class="card">

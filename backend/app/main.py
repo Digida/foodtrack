@@ -225,7 +225,95 @@ async def accept_language_middleware(request: Request, call_next):
     request.state.language = lang
     return await call_next(request)
 
+
+# ────────────────────────────────────────────────────────────────
+# 🛡️ Request body size limit (multi-GB POST protection) — B7
+# ────────────────────────────────────────────────────────────────
+
+MAX_BODY_SIZE = int(_os.getenv("MAX_BODY_SIZE", "10_485_760"))  # 10 MB default
+
+@app.middleware("http")
+async def body_size_limit_middleware(request: Request, call_next):
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > MAX_BODY_SIZE:
+        from fastapi.responses import PlainTextResponse
+        logger.warning({
+            "event": "body_too_large",
+            "method": request.method,
+            "path": request.url.path,
+            "content_length": int(content_length),
+            "max_size": MAX_BODY_SIZE,
+        })
+        return PlainTextResponse(
+            f"Request body too large. Maximum size is {MAX_BODY_SIZE} bytes.",
+            status_code=413,
+        )
+    return await call_next(request)
+
+
+# ────────────────────────────────────────────────────────────────
+# 🛡️ Rate limiting (login brute-force, public endpoints) — B6
+# ────────────────────────────────────────────────────────────────
+
+from collections import defaultdict
+import asyncio as _asyncio
+
+RATE_LIMIT_WINDOW = int(_os.getenv("RATE_LIMIT_WINDOW", "60"))  # seconds
+RATE_LIMIT_MAX = int(_os.getenv("RATE_LIMIT_MAX", "100"))        # requests per window
+
+_rate_limit_buckets: dict[str, list[float]] = defaultdict(list)
+_rate_limit_lock = _asyncio.Lock()  # single lock — good enough for in-memory
+
+@app.middleware("http")
+async def rate_limiting_middleware(request: Request, call_next):
+    # Apply to all routes, but public endpoints get stricter limits
+    path = request.url.path
+    is_public = any(path.startswith(p) for p in [
+        "/api/v1/auth/login", "/api/v1/auth/register",
+        "/api/v1/auth/send-otp", "/api/v1/auth/verify-otp",
+        "/api/v1/verify/", "/api/v1/contact",
+        "/api/v1/search", "/api/v1/search/autocomplete",
+        "/api/v1/health",
+    ])
+
+    window = RATE_LIMIT_WINDOW
+    max_reqs = min(RATE_LIMIT_MAX, 30) if is_public else RATE_LIMIT_MAX
+
+    # Use client IP as rate limit key
+    client_ip = request.client.host if request.client else "unknown"
+    key = f"{client_ip}:{path.split('/')[3] if len(path.split('/')) > 3 else 'other'}"
+
+    async with _rate_limit_lock:
+        now = time.time()
+        bucket = _rate_limit_buckets.get(key, [])
+        window_start = now - window
+        bucket = [t for t in bucket if t > window_start]
+
+        if len(bucket) >= max_reqs:
+            logger.warning({
+                "event": "rate_limit_exceeded",
+                "key": key,
+                "client_ip": client_ip,
+                "path": path,
+                "limit": max_reqs,
+                "window": window,
+            })
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                {"detail": "Rate limit exceeded. Try again later."},
+                status_code=429,
+                headers={"Retry-After": str(window)},
+            )
+
+        bucket.append(now)
+        _rate_limit_buckets[key] = bucket
+
+    return await call_next(request)
+
+
+# ────────────────────────────────────────────────────────────────
 # X-API-Key authentication + per-key rate limiting (Developer Portal keys).
+# ────────────────────────────────────────────────────────────────
 from app.middleware.api_key_middleware import api_key_middleware
 app.middleware("http")(api_key_middleware)
 
