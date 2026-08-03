@@ -796,6 +796,7 @@ async def get_taxonomy_item_detail(db: AsyncSession, item_id: int) -> dict | Non
         "gestation_period": item.gestation_period, "gestation_unit": item.gestation_unit,
         "local_uses": item.local_uses,
         "description": item.description, "image_url": item.image_url,
+        "supply_band": item.supply_band.value if hasattr(item.supply_band, "value") else item.supply_band,
         "names": names_list, "attributes": attrs_list,
         "linked_products": linked_products,
         "linked_batches": linked_batches,

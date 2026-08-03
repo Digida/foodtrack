@@ -55,3 +55,4 @@ class Tenant(Base):
     settlements = relationship("Settlement", back_populates="tenant")
     bulking_job_assignments = relationship("BulkingJobAssignment", back_populates="tenant")
     packing_records = relationship("PackingRecord", back_populates="tenant")
+    bulking_escrows = relationship("BulkingEscrow", back_populates="tenant")

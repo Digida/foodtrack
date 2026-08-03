@@ -38,9 +38,10 @@ Pages.home = (app) => {
       <section class="hero">
         <div class="hero-content">
           <h1>Digital Trust for<br>Your Food Supply Chain</h1>
-          <p class="hero-sub">Blockchain-powered traceability, smart certification, and product integrity — built for the agrifood industry.</p>
+          <p class="hero-sub">Blockchain-powered traceability, smart certification, investor bulking with escrow — built for the agrifood industry.</p>
           <div class="hero-actions">
             <a href="#login" class="btn btn-primary btn-lg">Get Started</a>
+            <a href="#bulking" class="btn btn-outline btn-lg">Bulk & Invest</a>
             <a href="#about" class="btn btn-outline btn-lg">Learn More</a>
           </div>
           <div class="hero-stats">
@@ -85,6 +86,16 @@ Pages.home = (app) => {
               <h3>Secure & Compliant</h3>
               <p>Multi-factor authentication, role-based access, and audit-ready data for regulatory compliance.</p>
             </div>
+            <div class="feature-card">
+              <div class="feature-icon">\u{1F4B0}</div>
+              <h3>Investor Bulking & Escrow</h3>
+              <p>Register commodity demand, collect farmer supply, and lock deals with escrow-backed deposits — released only when the buyer receives the goods.</p>
+            </div>
+            <div class="feature-card">
+              <div class="feature-icon">\u{1F9ED}</div>
+              <h3>Member Job Pipeline</h3>
+              <p>Assign clerks, verifiers, packers, certifiers, and couriers to each register, with independent certification across company lines.</p>
+            </div>
           </div>
         </div>
       </section>
@@ -95,7 +106,7 @@ Pages.home = (app) => {
           <div class="steps">
             <div class="step"><div class="step-num">1</div><h3>Register & Onboard</h3><p>Create your account, set up your company profile, and start adding products to the platform.</p></div>
             <div class="step"><div class="step-num">2</div><h3>Track & Certify</h3><p>Log supply chain events, issue digital certificates, and generate traceability records for every product.</p></div>
-            <div class="step"><div class="step-num">3</div><h3>Share & Prove</h3><p>Share product profiles with QR codes, compare against peers, and build trust with buyers and regulators.</p></div>
+            <div class="step"><div class="step-num">3</div><h3>Bulk & Escrow</h3><p>Register commodity demand, accept farmer bids, and deposit escrow — then release it to the seller once the buyer receives the goods.</p></div>
           </div>
         </div>
       </section>
@@ -277,7 +288,8 @@ Pages.verify = (app) => {
           ${(data.timeline || []).length > 0 ? `<p style="color:var(--text-light);margin-top:10px">${data.timeline.length} trace event(s)</p><div class="timeline" style="margin-top:8px">${data.timeline.map(e => `
             <div class="timeline-item"><div class="tl-title">${e.event_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</div>
             <div class="tl-sub">${e.location_name || ''} ${e.country ? '· '+e.country : ''} · ${new Date(e.event_timestamp).toLocaleString()}</div></div>`).join('')}</div>` : ''}</div>`;
-        document.getElementById('v-scan-result').innerHTML = '';
+        const vsr = document.getElementById('v-scan-result');
+        if (vsr) vsr.innerHTML = '';
       } catch (e) {
         el.innerHTML = `<div class="scan-result" style="background:#f8d7da;color:#721c24">No product or certificate found for "${query}"</div>`;
       }
@@ -288,10 +300,11 @@ Pages.verify = (app) => {
     (async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        document.getElementById('v-video').srcObject = stream;
+        const vv = document.getElementById('v-video');
+        if (vv) vv.srcObject = stream;
         scanning = true;
         scanLoop();
-      } catch (_) { document.querySelector('#scanner-box').innerHTML += '<p style="color:#6b7280;margin-top:12px">Camera not available. Use the search field above.</p>'; }
+      } catch (_) { const sb = document.querySelector('#scanner-box'); if (sb) sb.innerHTML += '<p style="color:#6b7280;margin-top:12px">Camera not available. Use the search field above.</p>'; }
     })();
 
     function scanLoop() {
@@ -322,7 +335,8 @@ Pages.verify = (app) => {
     function onScan(data) {
       if (!data || data === lastScanned) return;
       lastScanned = data;
-      document.getElementById('v-scan-result').innerHTML = `<div class="scan-result">Scanned: <strong>${data}</strong></div>`;
+      const vsr = document.getElementById('v-scan-result');
+      if (vsr) vsr.innerHTML = `<div class="scan-result">Scanned: <strong>${data}</strong></div>`;
       lookup(data);
     }
 
@@ -462,7 +476,8 @@ Pages.taxonomies = (app) => {
     html += '</div>';
     body.innerHTML = html;
     if (Auth.getUser()?.role === 'admin') {
-      document.getElementById('topbar-actions').innerHTML = '<button class="btn btn-primary btn-sm" id="add-tax-btn">+ New Taxonomy</button>';
+      const ta = document.getElementById('topbar-actions');
+      if (ta) ta.innerHTML = '<button class="btn btn-primary btn-sm" id="add-tax-btn">+ New Taxonomy</button>';
       document.getElementById('add-tax-btn')?.addEventListener('click', () => {
         const m = UI.modal('New Taxonomy', `
           <div class="form-group"><label>Name</label><input id="tx-name" class="fi" placeholder="e.g. Produce Types"></div>
@@ -741,7 +756,7 @@ Pages.products = (app) => {
     body.innerHTML = '<div id="prod-table"></div>';
     renderTable('');
     const tb = document.getElementById('topbar-actions');
-    tb.innerHTML = '<button class="btn btn-primary btn-sm" onclick="Pages.showCreateProduct()">+ New Product</button>';
+    if (tb) tb.innerHTML = '<button class="btn btn-primary btn-sm" onclick="Pages.showCreateProduct()">+ New Product</button>';
     return body;
   }));
 };
@@ -903,6 +918,7 @@ Pages.traceability = (app) => {
         <div id="recent-events"><div class="spinner"></div></div></div>`;
     API.get('/products').then(data => {
       const el = document.getElementById('recent-events');
+      if (!el) return;
       if (!data.products || data.products.length === 0) {
         el.innerHTML = '<div class="empty-state"><p>No products yet. Create a product and add trace events.</p></div>';
         return;
@@ -918,7 +934,7 @@ Pages.traceability = (app) => {
             ).join('') + '</div>';
           }
         });
-    }).catch(() => { document.getElementById('recent-events').innerHTML = '<div class="empty-state"><p>Could not load recent events</p></div>'; });
+    }).catch(() => { const re = document.getElementById('recent-events'); if (re) re.innerHTML = '<div class="empty-state"><p>Could not load recent events</p></div>'; });
     body.querySelector('#trace-btn').onclick = async () => {
       const q = document.getElementById('trace-q').value.trim();
       if (!q) return;
@@ -975,7 +991,8 @@ Pages.certificates = (app) => {
     };
     body.innerHTML = '<div id="cert-table"></div>';
     renderTable('');
-    document.getElementById('topbar-actions').innerHTML = '<button class="btn btn-primary btn-sm" onclick="Pages.showIssueCert()">+ Issue Certificate</button>';
+    const tc = document.getElementById('topbar-actions');
+    if (tc) tc.innerHTML = '<button class="btn btn-primary btn-sm" onclick="Pages.showIssueCert()">+ Issue Certificate</button>';
     return body;
   }));
 };
@@ -1122,7 +1139,9 @@ Pages.share = (app) => {
         const prod = prods.products.find(p => p.sku === sku);
         if (!prod) { UI.showError('Product not found'); return; }
         const data = await API.post('/share/generate-link', { product_id: prod.id });
-        document.getElementById('share-result').innerHTML = `
+        const sr = document.getElementById('share-result');
+        if (!sr) return;
+        sr.innerHTML = `
           <div class="scan-result">
             <h4>${data.product_name} (${data.product_sku})</h4>
             <code style="display:block;padding:8px;background:#f1f5f3;border-radius:4px;margin:8px 0;word-break:break-all">${data.share_url}</code>
@@ -1140,7 +1159,9 @@ Pages.share = (app) => {
       try {
         const data = await API.get(`/share/peer-compare/${pid}`);
         const p = data.product;
-        document.getElementById('peer-result').innerHTML = `
+        const pr = document.getElementById('peer-result');
+        if (!pr) return;
+        pr.innerHTML = `
           <div class="scan-result">
             <h4>${p.name} (${p.sku})</h4>
             <p style="color:#6b7280">Origin: ${p.origin || '—'} · Producer: ${p.producer}</p>
@@ -1168,10 +1189,14 @@ Pages.share = (app) => {
       if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
       const video = document.getElementById('scanner-video');
       if (video && video.srcObject) { video.srcObject.getTracks().forEach(t => t.stop()); video.srcObject = null; }
-      document.getElementById('scan-start').style.display = '';
-      document.getElementById('scan-stop').style.display = 'none';
-      document.getElementById('scan-indicator').style.display = 'none';
-      document.getElementById('scan-result').innerHTML = '';
+      const s1 = document.getElementById('scan-start');
+      if (s1) s1.style.display = '';
+      const s2 = document.getElementById('scan-stop');
+      if (s2) s2.style.display = 'none';
+      const s3 = document.getElementById('scan-indicator');
+      if (s3) s3.style.display = 'none';
+      const s4 = document.getElementById('scan-result');
+      if (s4) s4.innerHTML = '';
     };
 
     const detectFrame = async (video, canvas) => {
@@ -1686,7 +1711,10 @@ const _BULK_COURIER = { posted: ['badge-secondary', 'Posted'], assigned: ['badge
 const _BULK_JOB = { assigned: ['badge-info', 'Assigned'], in_progress: ['badge-warning', 'In Progress'], completed: ['badge-success', 'Completed'], cancelled: ['badge-danger', 'Cancelled'] };
 const _BULK_PACK = { packed: ['badge-info', 'Packed'], certified: ['badge-success', 'Certified'], cancelled: ['badge-danger', 'Cancelled'] };
 const _BULK_CONTACT = { farmer: ['badge-info', 'Farmer'], cooperative: ['badge-success', 'Cooperative'], aggregator: ['badge-warning', 'Aggregator'], trader: ['badge-secondary', 'Trader'] };
-const _BULK_ROLE = { clerk: ['badge-info', 'Clerk'], verifier: ['badge-warning', 'Verifier'], courier: ['badge-secondary', 'Courier'] };
+const _BULK_ROLE = { clerk: ['badge-info', 'Clerk'], verifier: ['badge-warning', 'Verifier'], packer: ['badge-info', 'Packer'], certifier: ['badge-warning', 'Certifier'], courier: ['badge-secondary', 'Courier'] };
+const _BULK_ESCROW = { required: ['badge-secondary', 'Required'], deposited: ['badge-info', 'Deposited'], held: ['badge-warning', 'Held'], released: ['badge-success', 'Released'], refunded: ['badge-danger', 'Refunded'] };
+const _BULK_BAND = { abundant: ['badge-success', 'Abundant · 30% escrow'], rare: ['badge-warning', 'Rare · 65% escrow'] };
+const _BULK_TRACE = { register: ['📋', 'Register'], collate: ['🤝', 'Collate'], escrow: ['🔒', 'Escrow'], jobs: ['🧑‍🔧', 'Member Jobs'], pack: ['📦', 'Pack'], certify: ['📜', 'Certify'], deliver: ['🚚', 'Deliver to Buyer'], receive: ['✅', 'Received'] };
 const _BULK_CERT = { draft: ['badge-secondary', 'Draft'], issued: ['badge-info', 'Issued'], verified: ['badge-success', 'Verified'], active: ['badge-success', 'Active'], revoked: ['badge-danger', 'Revoked'], expired: ['badge-secondary', 'Expired'] };
 const _BULK_METHOD = { stripe: ['badge-info', 'Stripe'], mpesa: ['badge-info', 'M-Pesa'], airtel_money: ['badge-info', 'Airtel Money'], mtn_momo: ['badge-info', 'MTN MoMo'], visa: ['badge-info', 'Visa'], mastercard: ['badge-info', 'Mastercard'], bank_transfer: ['badge-info', 'Bank Transfer'], cash: ['badge-secondary', 'Cash'] };
 const _bulkCurrencies = () => ['USD', 'EUR', 'GBP', 'KES', 'UGX', 'TZS', 'NGN', 'GHS', 'RWF', 'ZMW', 'EGP', 'ZAR'].map(c => `<option>${c}</option>`).join('');
@@ -1746,13 +1774,20 @@ Pages.bulkingRegister = (app, id) => {
     const hasJobs = (r.job_assignments || []).length > 0;
     const hasCerts = certs.some(c => ['issued', 'verified', 'active'].includes(c.status));
     const hasPacked = (r.packing_records || []).length > 0;
+    const escrow = r.escrow || { status: 'required', supply_band: 'abundant' };
+    const escrowDone = ['deposited', 'held', 'released'].includes(escrow.status);
+    const escrowReleased = escrow.status === 'released';
+    const deliveryJobs = (r.courier_jobs || []).filter(j => j.deliver_to_buyer);
+    const deliveredToBuyer = deliveryJobs.some(j => j.status === 'delivered');
 
     const stages = [
       ['Collate', '🤝', acceptedBids.length > 0],
-      ['Purchase', '🛒', hasDeals],
+      ['Escrow Deposit', '🔒', escrowDone],
       ['Assign Jobs', '🧑‍🔧', hasJobs],
-      ['Certify', '📜', hasCerts],
       ['Pack', '📦', hasPacked],
+      ['Certify', '📜', hasCerts],
+      ['Deliver to Buyer', '🚚', deliveredToBuyer],
+      ['Received & Released', '✅', escrowReleased],
     ];
     const stageHtml = `<div class="bulk-steps">${stages.map(([label, icon, done]) => `
       <div class="bulk-step ${done ? 'done' : ''}"><div class="bulk-step-icon">${done ? '✓' : icon}</div><div class="bulk-step-label">${label}</div></div>`).join('')}</div>`;
@@ -1822,11 +1857,35 @@ Pages.bulkingRegister = (app, id) => {
           <div>
             <div class="info-row"><div class="info-label">Region</div><div class="info-value">${r.region || '—'}</div></div>
             <div class="info-row"><div class="info-label">Sourcing Mode</div><div class="info-value">${String(r.sourcing_mode).replace(/_/g, ' ').toUpperCase() || '—'}</div></div>
+            <div class="info-row"><div class="info-label">Sourcing Entity</div><div class="info-value">${r.sourcing_entity_name || '—'}</div></div>
+            <div class="info-row"><div class="info-label">Supply Band</div><div class="info-value">${_bulkBadge(escrow.supply_band, _BULK_BAND)}</div></div>
             <div class="info-row"><div class="info-label">Created</div><div class="info-value">${_bulkFmt(r.created_at)}</div></div>
             <div class="info-row"><div class="info-label">Notes</div><div class="info-value">${r.notes || '—'}</div></div>
           </div>
         </div>
         <div class="bulk-toolbar" style="margin-top:12px">${regStatusBtns}</div>
+      </div>
+
+      <div class="card bulk-section">
+        <div class="card-header"><h3>🔒 Investor Escrow</h3>
+          <span>${_bulkBadge(escrow.status, _BULK_ESCROW)}</span>
+        </div>
+        <div class="inv-grid">
+          <div>
+            <div class="info-row"><div class="info-label">Supply Band</div><div class="info-value">${escrow.supply_band}</div></div>
+            <div class="info-row"><div class="info-label">Deposit Required</div><div class="info-value">${escrow.escrow_percentage}% of deal value</div></div>
+            <div class="info-row"><div class="info-label">Deal Basis</div><div class="info-value">${_bulkMoney(escrow.basis_amount, escrow.currency)}</div></div>
+            <div class="info-row"><div class="info-label">Amount Due</div><div class="info-value"><strong>${_bulkMoney(escrow.required_amount, escrow.currency)}</strong></div></div>
+          </div>
+          <div>
+            <div class="info-row"><div class="info-label">Deposited</div><div class="info-value">${_bulkMoney(escrow.deposited_amount, escrow.currency)}${escrow.deposited_at ? ' · ' + _bulkFmt(escrow.deposited_at) : ''}</div></div>
+            <div class="info-row"><div class="info-label">Released</div><div class="info-value">${escrow.released_at ? _bulkFmt(escrow.released_at) : '—'}</div></div>
+            <div class="info-row"><div class="info-label">Purpose</div><div class="info-value">Guarantee the investor's purchase before the pipeline runs.</div></div>
+          </div>
+        </div>
+        ${['required', 'refunded'].includes(escrow.status)
+          ? `<div class="bulk-toolbar" style="margin-top:12px"><button class="btn btn-sm btn-success" onclick="Pages.bulkDepositEscrow(${r.id})">Deposit ${escrow.escrow_percentage}% Escrow</button></div>`
+          : `<p style="font-size:12px;color:var(--text-light);margin-top:10px">${escrow.status === 'released' ? 'Escrow released to the seller after the buyer received the goods.' : 'Escrow deposited — funds are held until the buyer receives the goods.'}</p>`}
       </div>
 
       <div class="card bulk-section">
@@ -1866,7 +1925,7 @@ Pages.bulkingRegister = (app, id) => {
         <div class="card-header"><h3>🧑‍🔧 3. Assign Jobs</h3>
           <button class="btn btn-primary btn-sm" onclick="Pages.bulkAssignJob(${r.id})">+ Assign Job</button>
         </div>
-        <p style="font-size:13px;color:var(--text-light);margin-bottom:8px">Locus users take pipeline roles: <strong>Clerks</strong> collate & receive, <strong>Verifiers</strong> inspect quality, <strong>Couriers</strong> move stock.</p>
+        <p style="font-size:13px;color:var(--text-light);margin-bottom:8px">Entity members take pipeline roles: <strong>Clerks</strong> collate & receive, <strong>Verifiers</strong> inspect quality, <strong>Packers</strong> record output, <strong>Certifiers</strong> attest quality, <strong>Couriers</strong> move stock. A member cannot certify their own company's output.</p>
         <div class="table-container"><table><thead><tr><th>Role</th><th>Assignee</th><th>Location</th><th>Status</th><th>Notes</th><th>Actions</th></tr></thead><tbody>${jobRows}</tbody></table></div>
       </div>
 
@@ -1883,10 +1942,44 @@ Pages.bulkingRegister = (app, id) => {
         </div>
         <p style="font-size:13px;color:var(--text-light);margin-bottom:8px">Records the packaged output. Certifying a record links it to an issued certificate for the item.</p>
         <div class="table-container"><table><thead><tr><th>Quantity</th><th>Package Type</th><th>Count</th><th>Weight</th><th>Certificate</th><th>Status</th><th>Packed By</th><th>Actions</th></tr></thead><tbody>${packRows}</tbody></table></div>
+      </div>
+
+      <div class="card bulk-section">
+        <div class="card-header"><h3>🚚 6. Deliver to Buyer</h3>
+        </div>
+        <p style="font-size:13px;color:var(--text-light);margin-bottom:8px">Courier jobs flagged to deliver are handed to the investor once the buyer confirms receipt.</p>
+        <div class="table-container"><table><thead><tr><th>Pickup</th><th>Quantity</th><th>Budget</th><th>Courier</th><th>Status</th></tr></thead><tbody>${courierRows}</tbody></table></div>
+      </div>
+
+      <div class="card bulk-section">
+        <div class="card-header"><h3>🔎 7. Pipeline Trace</h3>
+        </div>
+        <div id="bulk-pipeline-trace" style="min-height:60px"><p style="font-size:13px;color:var(--text-light)">Loading trace…</p></div>
       </div>`;
+    Pages.bulkRenderTrace(r.id);
 
     return body;
   }));
+};
+
+Pages.bulkRenderTrace = (regId, tries) => {
+  const host = document.getElementById('bulk-pipeline-trace');
+  tries = tries || 0;
+  if (!host) {
+    if (tries < 25) setTimeout(() => Pages.bulkRenderTrace(regId, tries + 1), 120);
+    return;
+  }
+  API.get('/commerce/registers/' + regId + '/pipeline').then(res => {
+    if (!res || !res.stages) return;
+    const m = _BULK_TRACE;
+    host.innerHTML = '<div class="trace-grid">' + res.stages.map(s => {
+      const cell = m[s.key] || [s.key, s.key];
+      const active = !s.done && ['draft', 'sourcing', 'aggregated', 'required', 'pending', 'assigned', 'in_progress'].includes(s.status);
+      return '<div class="trace-cell ' + (s.done ? 'trace-done' : active ? 'trace-active' : '') + '">'
+        + '<div class="trace-ico">' + cell[0] + '</div><div class="trace-name">' + cell[1] + '</div>'
+        + '<div class="trace-state">' + s.status + (s.detail ? ' · ' + s.detail : '') + '</div></div>';
+    }).join('') + '</div>';
+  }).catch(() => { if (host) host.innerHTML = '<p style="font-size:13px;color:var(--text-muted)">Trace unavailable.</p>'; });
 };
 
 Pages.bulkCreateRegister = () => {
@@ -1908,6 +2001,7 @@ Pages.bulkCreateRegister = () => {
       <div class="form-group"><label>Region</label><input id="bq-region" class="fi" placeholder="e.g. Lake Zone, Tanzania"></div>
       <div class="form-group"><label>Sourcing Mode</label><select id="bq-mode" class="fi"><option value="self">Self-Sourced</option><option value="cooperative">Cooperative</option><option value="aggregator_network">Aggregator Network</option><option value="marketplace">Marketplace</option></select></div>
     </div>
+    <div class="form-group"><label>Sourcing Entity</label><input id="bq-entity" class="fi" placeholder="Cooperative / company name"></div>
     <div class="form-group"><label>Title</label><input id="bq-title" class="fi" placeholder="Optional title"></div>
     <div class="form-group"><label>Notes</label><textarea id="bq-notes" class="fi" rows="2"></textarea></div>
   `);
@@ -1952,6 +2046,7 @@ Pages.bulkCreateRegister = () => {
         currency: document.getElementById('bq-cur').value,
         region: document.getElementById('bq-region').value || undefined,
         sourcing_mode: document.getElementById('bq-mode').value,
+        sourcing_entity_name: document.getElementById('bq-entity').value || undefined,
         title: document.getElementById('bq-title').value || undefined,
         notes: document.getElementById('bq-notes').value || undefined,
       });
@@ -2206,6 +2301,7 @@ Pages.bulkPostCourier = (id) => {
       <div class="form-group"><label>Budget</label><input id="bj-budget" type="number" step="any" class="fi"></div>
     </div>
     <div class="form-group"><label>Courier Name</label><input id="bj-name" class="fi"></div>
+    <div class="form-check" style="margin-top:8px"><input type="checkbox" id="bj-deliver" style="width:auto;display:inline-block"> <label for="bj-deliver" style="display:inline;width:auto">Deliver to investor buyer (trigger receipt on delivery)</label></div>
   `);
   API.get('/warehouses').then(d => {
     const sel = document.getElementById('bj-wh');
@@ -2223,6 +2319,7 @@ Pages.bulkPostCourier = (id) => {
         weight_kg: _bulkNum(document.getElementById('bj-weight').value),
         budget: _bulkNum(document.getElementById('bj-budget').value),
         courier_name: document.getElementById('bj-name').value || undefined,
+        deliver_to_buyer: !!document.getElementById('bj-deliver').checked,
       });
       m.close();
       UI.showSuccess('Courier job posted');
@@ -2235,10 +2332,11 @@ Pages.bulkPostCourier = (id) => {
 Pages.bulkAssignJob = (id) => {
   const m = UI.modal('Assign Job', `
     <div class="form-group"><label>Role</label><select id="bj-role" class="fi">
-      <option value="clerk">Clerk</option><option value="verifier">Verifier</option><option value="courier">Courier</option></select></div>
+      <option value="clerk">Clerk</option><option value="verifier">Verifier</option><option value="packer">Packer</option><option value="certifier">Certifier</option><option value="courier">Courier</option></select></div>
     <div class="form-group"><label>Assignee</label><select id="bj-cand" class="fi"><option value="">Loading...</option></select></div>
     <div class="form-group"><label>Location</label><input id="bj-loc" class="fi"></div>
     <div class="form-group"><label>Notes</label><textarea id="bj-notes" class="fi" rows="2"></textarea></div>
+    <p style="font-size:12px;color:var(--text-light);margin:4px 0 0">Certifiers cannot be from the same company as the register's owner.</p>
   `);
   API.get(`/commerce/registers/${id}/job-candidates`).then(d => {
     const sel = document.getElementById('bj-cand');
@@ -2256,6 +2354,27 @@ Pages.bulkAssignJob = (id) => {
       });
       m.close();
       UI.showSuccess('Job assigned');
+      _bulkRefresh();
+    } catch (e) { UI.showError(e.message); }
+  }));
+  m.actions.appendChild(UI.btn('Cancel', 'btn-outline', () => m.close()));
+};
+
+Pages.bulkDepositEscrow = (id) => {
+  const m = UI.modal('Deposit Escrow', `
+    <div class="form-group"><label>Payment Method</label><select id="bj-method" class="fi">
+      <option value="bank_transfer">Bank Transfer</option><option value="card">Card</option><option value="mobile_money">Mobile Money</option></select></div>
+    <div class="form-group"><label>Reference</label><input id="bj-ref" class="fi" placeholder="Transaction reference (optional)"></div>
+    <p style="font-size:12px;color:var(--text-light);margin:4px 0 0">Funds are held in escrow until the buyer receives the goods, then released to the seller.</p>
+  `);
+  m.actions.appendChild(UI.btn('Deposit', 'btn-success', async () => {
+    try {
+      await API.post(`/commerce/registers/${id}/escrow/deposit`, {
+        method: document.getElementById('bj-method').value,
+        reference: document.getElementById('bj-ref').value || undefined,
+      });
+      m.close();
+      UI.showSuccess('Escrow deposited');
       _bulkRefresh();
     } catch (e) { UI.showError(e.message); }
   }));
@@ -2424,6 +2543,7 @@ Pages.batches = (app) => {
     const load = async (page = 1) => {
       const data = await API.get('/batches?page=' + page);
       const el = document.getElementById('batches-content');
+      if (!el) return;
       let html = `<div class="list-header">
         <p style="color:var(--text-light)">${data.total} batch(es)</p>
         <button class="btn btn-primary btn-sm" id="add-batch-btn">+ New Batch</button></div>`;
@@ -2526,6 +2646,7 @@ Pages.warehouses = (app) => {
     const load = async (page = 1) => {
       const data = await API.get('/warehouses?page=' + page);
       const el = document.getElementById('warehouses-content');
+      if (!el) return;
       let html = `<div class="list-header">
         <p style="color:var(--text-light)">${data.total} warehouse(s)</p>
         <button class="btn btn-primary btn-sm" id="add-wh-btn">+ New Warehouse</button></div>
@@ -2650,6 +2771,7 @@ Pages.shipments = (app) => {
     const load = async (page = 1) => {
       const data = await API.get('/shipments?page=' + page);
       const el = document.getElementById('shipments-content');
+      if (!el) return;
       let html = `<div class="list-header">
         <p style="color:var(--text-light)">${data.total} shipment(s)</p>
         <button class="btn btn-primary btn-sm" id="add-ship-btn">+ New Shipment</button></div>`;

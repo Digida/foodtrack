@@ -138,10 +138,12 @@ async def get_item_by_code(db: AsyncSession, code: str) -> TaxonomyItem | None:
 
 async def create_item(db: AsyncSession, node_id: int, code: str, common_name: str,
                        scientific_name: str | None = None, genre: str | None = None,
-                       description: str | None = None, image_url: str | None = None) -> TaxonomyItem:
+                       description: str | None = None, image_url: str | None = None,
+                       supply_band: str | None = None) -> TaxonomyItem:
     item = TaxonomyItem(node_id=node_id, code=code, common_name=common_name,
                         scientific_name=scientific_name, genre=genre,
-                        description=description, image_url=image_url)
+                        description=description, image_url=image_url,
+                        supply_band=supply_band)
     db.add(item)
     await db.commit()
     await db.refresh(item)

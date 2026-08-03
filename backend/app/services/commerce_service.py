@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.user import User, UserRole
-from app.models.taxonomy import TaxonomyItem
+from app.models.taxonomy import TaxonomyItem, ItemSupplyBand
 from app.models.tracking import Warehouse
 from app.models.certificate import Certificate
 from app.models.commerce import (
@@ -41,12 +41,17 @@ from app.models.commerce import (
     Settlement, SettlementStatus,
     BulkingJobAssignment, BulkingJobRole, BulkingJobStatus,
     PackingRecord, PackingStatus,
+    BulkingEscrow, EscrowStatus,
 )
 
 PAGE_SIZE = 20
 PLATFORM_FEE_RATE = 0.025  # 2.5% platform fee on gross settlement
 PLATFORM_FEE_DECIMAL = Decimal("0.025")
 HUNDREDTH = Decimal("0.01")
+# Investor escrow: buyers deposit a share of the deal value up front before the
+# pipeline runs. Abundant items require 30%, rare items require 65%.
+ESCROW_PCT_ABUNDANT = Decimal("0.30")
+ESCROW_PCT_RARE = Decimal("0.65")
 
 
 def _money(value) -> Decimal:
@@ -56,6 +61,80 @@ def _money(value) -> Decimal:
 
 def _round_money(value) -> Decimal:
     return _money(value).quantize(HUNDREDTH, rounding=ROUND_HALF_UP)
+
+
+def escrow_percentage_for(item: TaxonomyItem | None) -> Decimal:
+    """30% deposit for abundant items, 65% for rare items."""
+    band = None
+    if item is not None:
+        band = item.supply_band
+        if hasattr(band, "value"):
+            band = band.value
+    if band == ItemSupplyBand.RARE.value:
+        return ESCROW_PCT_RARE
+    return ESCROW_PCT_ABUNDANT
+
+
+def _escrow_basis(register: BulkingRegister, deals: list, bids: list) -> Decimal:
+    """The deal value an investor's escrow is calculated against: closed deals
+    when present, otherwise accepted bid volume x price, otherwise the register
+    target price x target quantity."""
+    if deals:
+        return sum((_money(d.total_value) for d in deals), Decimal("0"))
+    accepted = [b for b in bids if b.status == BidStatus.ACCEPTED]
+    if accepted:
+        return sum((_money(b.quantity) * _money(b.unit_price) for b in accepted), Decimal("0"))
+    return _round_money(_money(register.target_price or 0) * _money(register.target_quantity))
+
+
+def _escrow_out(register: BulkingRegister, item: TaxonomyItem | None, deals: list, bids: list, escrows: list) -> dict:
+    """Summary of the register's escrow requirement and latest deposit state."""
+    band = None
+    if item is not None:
+        band = item.supply_band
+        if hasattr(band, "value"):
+            band = band.value
+    pct = escrow_percentage_for(item)
+    basis = _escrow_basis(register, deals, bids)
+    latest = escrows[-1] if escrows else None
+    status = None
+    deposited_at = released_at = None
+    deposited_amount = Decimal("0")
+    if latest is not None:
+        status = latest.status.value if hasattr(latest.status, "value") else str(latest.status)
+        deposited_at = str(latest.deposited_at) if latest.deposited_at else None
+        released_at = str(latest.released_at) if latest.released_at else None
+        deposited_amount = _money(latest.amount)
+    if status is None:
+        status = EscrowStatus.REQUIRED.value
+    return {
+        "supply_band": band or ItemSupplyBand.ABUNDANT.value,
+        "escrow_percentage": float(pct * 100),
+        "basis_amount": float(basis),
+        "required_amount": float(_round_money(basis * pct)),
+        "currency": register.currency or "USD",
+        "status": status,
+        "deposited_amount": float(deposited_amount),
+        "deposited_at": deposited_at,
+        "released_at": released_at,
+    }
+
+
+def _escrow_record_out(e: BulkingEscrow) -> dict:
+    return {
+        "id": e.id,
+        "register_id": e.register_id,
+        "item_id": e.item_id,
+        "payer_id": e.payer_id,
+        "percentage": float(e.percentage),
+        "amount": float(e.amount),
+        "currency": e.currency or "USD",
+        "status": e.status.value if hasattr(e.status, "value") else str(e.status),
+        "payment_id": e.payment_id,
+        "deposited_at": str(e.deposited_at) if e.deposited_at else None,
+        "released_at": str(e.released_at) if e.released_at else None,
+        "created_at": str(e.created_at) if e.created_at else None,
+    }
 
 SUPPORTED_PAYMENT_METHODS = [
     {
@@ -203,7 +282,15 @@ def _provider_ref(method: PaymentMethod) -> str:
 def _item_summary(item: TaxonomyItem | None) -> dict:
     if item is None:
         return {}
-    return {"item_id": item.id, "item_code": item.code, "item_name": item.common_name}
+    band = item.supply_band
+    if hasattr(band, "value"):
+        band = band.value
+    return {
+        "item_id": item.id,
+        "item_code": item.code,
+        "item_name": item.common_name,
+        "supply_band": band or ItemSupplyBand.ABUNDANT.value,
+    }
 
 
 def _appointment_out(a: Appointment) -> dict:
@@ -281,6 +368,7 @@ def _courier_out(j: CourierJob) -> dict:
         "item_id": j.item_id,
         "pickup_location": j.pickup_location,
         "dropoff_warehouse_id": j.dropoff_warehouse_id,
+        "deliver_to_buyer": bool(j.deliver_to_buyer),
         "quantity": j.quantity,
         "unit": j.unit,
         "weight_kg": j.weight_kg,
@@ -430,6 +518,10 @@ async def _register_detail(db: AsyncSession, r: BulkingRegister, user: User | No
         select(PackingRecord).where(PackingRecord.register_id == r.id)
         .order_by(PackingRecord.created_at)
     )).scalars().all()
+    escrows = (await db.execute(
+        select(BulkingEscrow).where(BulkingEscrow.register_id == r.id)
+        .order_by(BulkingEscrow.created_at)
+    )).scalars().all()
 
     accepted_volume = sum(b.quantity for b in bids if b.status == BidStatus.ACCEPTED)
     return {
@@ -444,10 +536,13 @@ async def _register_detail(db: AsyncSession, r: BulkingRegister, user: User | No
         "currency": r.currency,
         "region": r.region,
         "sourcing_mode": r.sourcing_mode.value if hasattr(r.sourcing_mode, "value") else str(r.sourcing_mode),
+        "sourcing_entity_id": r.sourcing_entity_id,
+        "sourcing_entity_name": r.sourcing_entity_name,
         "status": r.status.value if hasattr(r.status, "value") else str(r.status),
         "generated": r.generated,
         "notes": r.notes,
         "accepted_volume": accepted_volume,
+        "escrow": _escrow_out(r, item, deals, bids, escrows),
         "created_at": str(r.created_at) if r.created_at else None,
         "updated_at": str(r.updated_at) if r.updated_at else None,
         "contacts": [_contact_out(c) for c in contacts],
@@ -459,6 +554,7 @@ async def _register_detail(db: AsyncSession, r: BulkingRegister, user: User | No
         "payments": [_payment_out(p) for p in payments],
         "job_assignments": [_job_out(j) for j in job_assignments],
         "packing_records": [_packing_out(p) for p in packing_records],
+        "escrows": [_escrow_record_out(e) for e in escrows],
     }
 
 
@@ -529,6 +625,7 @@ async def create_bulking_register(
     title: str | None = None, unit: str | None = None, target_price: float | None = None,
     currency: str = "USD", region: str | None = None,
     sourcing_mode: SourcingMode = SourcingMode.SELF, auto_generate: bool = False,
+    sourcing_entity_id: int | None = None, sourcing_entity_name: str | None = None,
     notes: str | None = None,
 ) -> BulkingRegister:
     if not _can_buy(user):
@@ -540,6 +637,17 @@ async def create_bulking_register(
     item = await db.get(TaxonomyItem, item_id)
     if not item:
         raise ValueError(f"TaxonomyItem {item_id} not found")
+
+    # Resolve the sourcing entity (cooperative/company supplying the item through
+    # its member users). The entity name drives the same-company self-certify block.
+    entity_id = sourcing_entity_id
+    entity_name = sourcing_entity_name
+    if entity_id:
+        entity_user = await db.get(User, entity_id)
+        if not entity_user or not entity_user.is_active:
+            raise ValueError("Sourcing entity user not found or inactive")
+        if not entity_name:
+            entity_name = entity_user.company or entity_user.full_name
 
     # Hoist ORM attribute reads above the retry loop: db.rollback() on a
     # failed insert expires every instance in the session, so touching
@@ -559,6 +667,7 @@ async def create_bulking_register(
             target_quantity=target_quantity, unit=reg_unit,
             target_price=target_price, currency=reg_currency,
             region=region, sourcing_mode=sourcing_mode,
+            sourcing_entity_id=entity_id, sourcing_entity_name=entity_name,
             status=RegisterStatus.DRAFT, notes=notes,
             created_by=buyer_id,
         )
@@ -698,6 +807,176 @@ async def update_register_status(db: AsyncSession, user: User, register_id: int,
     await db.commit()
     await db.refresh(register)
     return register
+
+
+# ── Escrow (investor deposit) ───────────────────────────────────────────────
+
+async def get_escrow_requirement(db: AsyncSession, user: User, register_id: int) -> dict:
+    """The investor's escrow requirement: 30% of deal value for abundant items,
+    65% for rare items, plus the current deposit state."""
+    register = await _get_register(db, register_id)
+    if not register:
+        raise ValueError("Register not found")
+    if not _is_admin(user) and register.buyer_id != user.id:
+        raise PermissionError("Not your register")
+    item = await db.get(TaxonomyItem, register.item_id)
+    deals = (await db.execute(
+        select(Deal).where(Deal.register_id == register_id)
+    )).scalars().all()
+    bids = (await db.execute(
+        select(BulkingBid).where(BulkingBid.register_id == register_id)
+    )).scalars().all()
+    escrows = (await db.execute(
+        select(BulkingEscrow).where(BulkingEscrow.register_id == register_id)
+        .order_by(BulkingEscrow.created_at)
+    )).scalars().all()
+    return _escrow_out(register, item, deals, bids, escrows)
+
+
+async def deposit_escrow(
+    db: AsyncSession, user: User, register_id: int,
+    method: PaymentMethod = PaymentMethod.BANK_TRANSFER,
+) -> BulkingEscrow:
+    """Record the investor's escrow deposit for a register. The amount is
+    30% (abundant) or 65% (rare) of the deal value; a succeeded Payment is
+    created alongside the escrow record."""
+    register = await _get_register(db, register_id)
+    if not register:
+        raise ValueError("Register not found")
+    if not _is_admin(user) and register.buyer_id != user.id:
+        raise PermissionError("Not your register")
+    if register.status in (RegisterStatus.CLOSED, RegisterStatus.CANCELLED):
+        raise ValueError("Cannot deposit escrow on a closed or cancelled register")
+    if not method:
+        raise ValueError("payment method is required")
+
+    item = await db.get(TaxonomyItem, register.item_id)
+    deals = (await db.execute(
+        select(Deal).where(Deal.register_id == register_id)
+    )).scalars().all()
+    bids = (await db.execute(
+        select(BulkingBid).where(BulkingBid.register_id == register_id)
+    )).scalars().all()
+    escrows = (await db.execute(
+        select(BulkingEscrow).where(BulkingEscrow.register_id == register_id)
+        .order_by(BulkingEscrow.created_at)
+    )).scalars().all()
+    for e in escrows:
+        if e.status in (EscrowStatus.DEPOSITED, EscrowStatus.HELD, EscrowStatus.RELEASED):
+            raise ValueError("Escrow has already been deposited for this register")
+
+    basis = _escrow_basis(register, deals, bids)
+    if basis <= 0:
+        raise ValueError("No deal value to escrow yet — accept bids or close deals first")
+    pct = escrow_percentage_for(item)
+    amount = _round_money(basis * pct)
+    currency = register.currency or "USD"
+
+    payment = Payment(
+        register_id=register_id, payer_id=user.id, payee_id=None,
+        tenant_id=register.tenant_id, amount=amount, currency=currency,
+        method=method, provider_reference=_provider_ref(method),
+        status=PaymentStatus.SUCCEEDED, paid_at=datetime.now(timezone.utc),
+    )
+    db.add(payment)
+    await db.flush()
+
+    escrow = BulkingEscrow(
+        register_id=register_id, item_id=register.item_id, tenant_id=register.tenant_id,
+        payer_id=user.id, percentage=pct * 100, amount=amount, currency=currency,
+        status=EscrowStatus.DEPOSITED, payment_id=payment.id,
+        deposited_at=datetime.now(timezone.utc),
+    )
+    db.add(escrow)
+    await db.commit()
+    await db.refresh(escrow)
+    return escrow
+
+
+# ── Pipeline trace ──────────────────────────────────────────────────────────
+
+async def get_pipeline_trace(db: AsyncSession, user: User, register_id: int) -> dict:
+    """Investor-facing view of the bulking pipeline: register, collate (bids),
+    escrow, member jobs (clerk/verifier/packer/certifier/courier), packing &
+    certification, buyer delivery and receipt."""
+    register = await _get_register(db, register_id)
+    if not register:
+        raise ValueError("Register not found")
+    if not _is_admin(user) and register.buyer_id != user.id:
+        raise PermissionError("Not your register")
+
+    item = await db.get(TaxonomyItem, register.item_id)
+    bids = (await db.execute(
+        select(BulkingBid).where(BulkingBid.register_id == register_id)
+    )).scalars().all()
+    deals = (await db.execute(
+        select(Deal).where(Deal.register_id == register_id)
+    )).scalars().all()
+    courier_jobs = (await db.execute(
+        select(CourierJob).where(CourierJob.register_id == register_id)
+    )).scalars().all()
+    job_assignments = (await db.execute(
+        select(BulkingJobAssignment).where(BulkingJobAssignment.register_id == register_id)
+    )).scalars().all()
+    packing_records = (await db.execute(
+        select(PackingRecord).where(PackingRecord.register_id == register_id)
+    )).scalars().all()
+    escrows = (await db.execute(
+        select(BulkingEscrow).where(BulkingEscrow.register_id == register_id)
+        .order_by(BulkingEscrow.created_at)
+    )).scalars().all()
+
+    accepted = [b for b in bids if b.status == BidStatus.ACCEPTED]
+    escrow = _escrow_out(register, item, deals, bids, escrows)
+    escrow_status = escrow["status"]
+    delivery_jobs = [j for j in courier_jobs if j.deliver_to_buyer]
+    delivery_done = any(j.status == CourierJobStatus.DELIVERED for j in delivery_jobs)
+    packing_done = len(packing_records) > 0
+    certified = any(p.status == PackingStatus.CERTIFIED for p in packing_records)
+
+    role_status = {}
+    for role in BulkingJobRole:
+        role_items = [j for j in job_assignments if j.role == role]
+        role_status[role.value] = {
+            "assigned": len(role_items),
+            "completed": sum(1 for j in role_items if j.status == BulkingJobStatus.COMPLETED),
+        }
+
+    reg_status = register.status.value if hasattr(register.status, "value") else str(register.status)
+    jobs_total = len(job_assignments)
+    jobs_completed = sum(1 for j in job_assignments if j.status == BulkingJobStatus.COMPLETED)
+    stages = [
+        {"key": "register", "label": "Register", "icon": "📋",
+         "done": register.status != RegisterStatus.DRAFT, "status": reg_status},
+        {"key": "collate", "label": "Collate", "icon": "🤝",
+         "done": len(accepted) > 0, "status": "accepted" if accepted else "pending"},
+        {"key": "escrow", "label": "Escrow Deposit", "icon": "🔒",
+         "done": escrow_status in (EscrowStatus.DEPOSITED.value, EscrowStatus.HELD.value, EscrowStatus.RELEASED.value),
+         "status": escrow_status},
+        {"key": "jobs", "label": "Member Jobs", "icon": "🧑‍🔧",
+         "done": jobs_total > 0 and jobs_completed == jobs_total,
+         "status": (f"{jobs_completed}/{jobs_total} completed" if jobs_total else "no jobs")},
+        {"key": "pack", "label": "Pack", "icon": "📦",
+         "done": packing_done, "status": "packed" if packing_done else "pending"},
+        {"key": "certify", "label": "Certify", "icon": "📜",
+         "done": certified, "status": "certified" if certified else "pending"},
+        {"key": "deliver", "label": "Deliver to Buyer", "icon": "🚚",
+         "done": delivery_done, "status": CourierJobStatus.DELIVERED.value if delivery_done else "pending"},
+        {"key": "receive", "label": "Received & Released", "icon": "✅",
+         "done": escrow_status == EscrowStatus.RELEASED.value,
+         "status": "received" if escrow_status == EscrowStatus.RELEASED.value else reg_status},
+    ]
+
+    return {
+        "register_id": register_id,
+        "register_number": register.register_number,
+        **_item_summary(item),
+        "status": reg_status,
+        "escrow": escrow,
+        "stages": stages,
+        "roles": role_status,
+        "delivery_jobs": [_courier_out(j) for j in delivery_jobs],
+    }
 
 
 # ── Contacts ───────────────────────────────────────────────────────────────
@@ -877,6 +1156,7 @@ async def post_courier_job(
     item_id: int | None = None, dropoff_warehouse_id: int | None = None,
     quantity: float | None = None, unit: str | None = None, weight_kg: float | None = None,
     budget: float | None = None, currency: str = "USD", courier_name: str | None = None,
+    deliver_to_buyer: bool = False,
 ) -> CourierJob:
     register = await _get_register(db, register_id)
     if not register:
@@ -898,6 +1178,7 @@ async def post_courier_job(
     job = CourierJob(
         register_id=register_id, item_id=item_id or register.item_id, tenant_id=register.tenant_id,
         pickup_location=pickup_location, dropoff_warehouse_id=dropoff_warehouse_id,
+        deliver_to_buyer=deliver_to_buyer,
         quantity=quantity, unit=unit or register.unit or "kg", weight_kg=weight_kg,
         budget=budget, currency=currency or register.currency or "USD",
         status=CourierJobStatus.POSTED, courier_name=courier_name,
@@ -933,9 +1214,24 @@ async def update_courier_job_status(db: AsyncSession, user: User, job_id: int, s
     job.status = status
     if status == CourierJobStatus.DELIVERED and not job.delivered_at:
         job.delivered_at = datetime.now(timezone.utc)
+        # Buyer-delivery final leg: the investor received the goods they paid
+        # for, so the escrow is released to the seller.
+        if job.deliver_to_buyer:
+            await _release_register_escrow(db, register)
     await db.commit()
     await db.refresh(job)
     return job
+
+
+async def _release_register_escrow(db: AsyncSession, register: BulkingRegister) -> None:
+    escrows = (await db.execute(
+        select(BulkingEscrow).where(BulkingEscrow.register_id == register.id)
+        .order_by(BulkingEscrow.created_at)
+    )).scalars().all()
+    for escrow in escrows:
+        if escrow.status in (EscrowStatus.DEPOSITED, EscrowStatus.HELD):
+            escrow.status = EscrowStatus.RELEASED
+            escrow.released_at = datetime.now(timezone.utc)
 
 
 # ── Deals & credential exchange ────────────────────────────────────────────
@@ -1267,6 +1563,19 @@ async def create_job_assignment(
     if not assignee_name or not assignee_name.strip():
         raise ValueError("assignee_name is required")
 
+    # Same-company no-self-certify: the certifier is an entity member user, but
+    # they must not belong to the sourcing entity that produced the item.
+    if role == BulkingJobRole.CERTIFIER:
+        if assignee is None:
+            raise ValueError("Certifier must be a registered user (assignee_id is required)")
+        entity = (register.sourcing_entity_name or "").strip().lower()
+        company = (assignee.company or "").strip().lower()
+        if entity and company and entity == company:
+            raise ValueError(
+                "Certifier cannot belong to the sourcing entity — "
+                "same-company self-certification is not allowed"
+            )
+
     assignment = BulkingJobAssignment(
         register_id=register_id, item_id=register.item_id, tenant_id=register.tenant_id,
         role=role, assignee_id=assignee.id if assignee else None,
@@ -1406,9 +1715,7 @@ async def get_business_dashboard(db: AsyncSession, user: User) -> dict:
     admin = _is_admin(user)
 
     def _register_scope():
-        return BulkingRegister.id.in_(
-            select(BulkingRegister.id).where(BulkingRegister.buyer_id == user.id)
-        )
+        return select(BulkingRegister.id).where(BulkingRegister.buyer_id == user.id)
 
     async def _count(model, col, *extra):
         q = select(func.count(model.id))
@@ -1448,6 +1755,20 @@ async def get_business_dashboard(db: AsyncSession, user: User) -> dict:
 
     total_payments = await _count(Payment, Payment.payer_id)
     succeeded_payments = await _count(Payment, Payment.payer_id, Payment.status == PaymentStatus.SUCCEEDED)
+
+    # Escrow KPIs
+    escrow_total = await _register_count(BulkingEscrow)
+    escrow_deposited = await _register_count(
+        BulkingEscrow,
+        BulkingEscrow.status.in_([EscrowStatus.DEPOSITED, EscrowStatus.HELD]),
+    )
+    escrow_released = await _register_count(BulkingEscrow, BulkingEscrow.status == EscrowStatus.RELEASED)
+    q_escrow_value = select(func.coalesce(func.sum(BulkingEscrow.amount), 0)).where(
+        BulkingEscrow.status.in_([EscrowStatus.DEPOSITED, EscrowStatus.HELD])
+    )
+    if not admin:
+        q_escrow_value = q_escrow_value.where(BulkingEscrow.register_id.in_(_register_scope()))
+    escrow_value = (await db.execute(q_escrow_value)).scalar() or 0.0
 
     # Monetary aggregates
     q_deal_value = select(func.coalesce(func.sum(Deal.total_value), 0))
@@ -1512,6 +1833,12 @@ async def get_business_dashboard(db: AsyncSession, user: User) -> dict:
             "total": total_payments,
             "succeeded": succeeded_payments,
             "by_method": payments_by_method,
+        },
+        "escrows": {
+            "total": escrow_total,
+            "deposited": escrow_deposited,
+            "released": escrow_released,
+            "value_held": round(escrow_value, 2),
         },
         "platform_fee_rate": PLATFORM_FEE_RATE,
     }

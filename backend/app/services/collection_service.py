@@ -27,14 +27,14 @@ async def list_collections(db: AsyncSession, page: int = 1):
     items = (await db.execute(q.offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE).order_by(Collection.sort_order, Collection.name))).scalars().all()
     result = []
     for c in items:
-        item_count = await db.execute(
+        item_count = (await db.execute(
             select(func.count()).select_from(CollectionItem).where(CollectionItem.collection_id == c.id)
-        )
+        )).scalar() or 0
         result.append({
             "id": c.id, "name": c.name, "slug": c.slug,
             "description": c.description, "image_url": c.image_url,
             "is_ai_generated": c.is_ai_generated,
-            "item_count": (await item_count).scalar() or 0,
+            "item_count": item_count,
             "created_at": str(c.created_at) if c.created_at else None,
         })
     return {"collections": result, "total": total, "page": page, "total_pages": max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)}

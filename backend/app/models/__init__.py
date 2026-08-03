@@ -5,7 +5,7 @@ from app.models.product import Product, ProductCategory
 from app.models.certificate import Certificate, CertificateStatus, CertificateType, CertificateRequest, CertificateRequestStatus
 from app.models.traceability import TraceabilityEvent, EventType
 from app.models.contact import ContactMessage
-from app.models.taxonomy import Taxonomy, TaxonomyNode, TaxonomyItem, ItemName, ItemAttribute, ItemIdentifierLog
+from app.models.taxonomy import Taxonomy, TaxonomyNode, TaxonomyItem, ItemName, ItemAttribute, ItemIdentifierLog, ItemSupplyBand
 from app.models.tracking import (
     Batch, BatchStatus, Warehouse, WarehouseItem,
     Shipment, ShipmentStatus, ShipmentMode, ShipmentBatch,
@@ -29,9 +29,9 @@ from app.models.commerce import (
     Appointment, AppointmentStatus, SourcingMode, RegisterStatus, ContactType,
     BidStatus, DealStatus, WarehouseBookingStatus, CourierJobStatus, PaymentMethod,
     PaymentStatus, SettlementStatus,
-    BulkingJobRole, BulkingJobStatus, PackingStatus,
+    BulkingJobRole, BulkingJobStatus, PackingStatus, EscrowStatus,
     BulkingRegister, BulkingContact, BulkingBid, WarehouseBooking, CourierJob,
-    Deal, Payment, Settlement, BulkingJobAssignment, PackingRecord,
+    Deal, Payment, Settlement, BulkingJobAssignment, PackingRecord, BulkingEscrow,
 )
 
 __all__ = [
@@ -43,7 +43,7 @@ __all__ = [
     "CertificateRequest", "CertificateRequestStatus",
     "TraceabilityEvent", "EventType",
     "ContactMessage",
-    "Taxonomy", "TaxonomyNode", "TaxonomyItem", "ItemName", "ItemAttribute", "ItemIdentifierLog",
+    "Taxonomy", "TaxonomyNode", "TaxonomyItem", "ItemName", "ItemAttribute", "ItemIdentifierLog", "ItemSupplyBand",
     "Batch", "BatchStatus",
     "Warehouse", "WarehouseItem",
     "Shipment", "ShipmentStatus", "ShipmentMode", "ShipmentBatch", "ItemShipmentStatus",
@@ -65,8 +65,8 @@ __all__ = [
     "SourcingMode", "RegisterStatus", "ContactType", "BidStatus", "DealStatus",
     "WarehouseBookingStatus", "CourierJobStatus", "PaymentMethod", "PaymentStatus",
     "SettlementStatus",
-    "BulkingJobRole", "BulkingJobStatus", "PackingStatus",
+    "BulkingJobRole", "BulkingJobStatus", "PackingStatus", "EscrowStatus",
     "BulkingRegister", "BulkingContact", "BulkingBid", "WarehouseBooking",
     "CourierJob", "Deal", "Payment", "Settlement",
-    "BulkingJobAssignment", "PackingRecord",
+    "BulkingJobAssignment", "PackingRecord", "BulkingEscrow",
 ]

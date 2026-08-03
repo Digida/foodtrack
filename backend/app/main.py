@@ -266,8 +266,13 @@ _rate_limit_lock = _asyncio.Lock()  # single lock — good enough for in-memory
 
 @app.middleware("http")
 async def rate_limiting_middleware(request: Request, call_next):
-    # Apply to all routes, but public endpoints get stricter limits
+    # Apply to API routes only. Static assets (JS/CSS/images served by the
+    # frontend mount) and infra endpoints must never be throttled — doing so
+    # would 429 the app's own assets and break the UI under normal load.
     path = request.url.path
+    if not path.startswith("/api/"):
+        return await call_next(request)
+    # Public endpoints get stricter limits
     is_public = any(path.startswith(p) for p in [
         "/api/v1/auth/login", "/api/v1/auth/register",
         "/api/v1/auth/send-otp", "/api/v1/auth/verify-otp",

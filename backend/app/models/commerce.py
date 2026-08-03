@@ -106,9 +106,13 @@ class SettlementStatus(str, enum.Enum):
 
 class BulkingJobRole(str, enum.Enum):
     """Pipeline roles assumed by users in the item's locus. Clerks collate and
-    receive goods, Verifiers inspect and certify quality, Couriers move stock."""
+    receive goods, Verifiers inspect and certify quality, Packers package the
+    aggregated lot, Certifiers issue the quality certificate and Couriers move
+    stock to the buyer."""
     CLERK = "clerk"
     VERIFIER = "verifier"
+    PACKER = "packer"
+    CERTIFIER = "certifier"
     COURIER = "courier"
 
 
@@ -123,6 +127,17 @@ class PackingStatus(str, enum.Enum):
     PACKED = "packed"
     CERTIFIED = "certified"
     CANCELLED = "cancelled"
+
+
+class EscrowStatus(str, enum.Enum):
+    """Investor escrow lifecycle. The buyer deposits a percentage of the deal
+    value up front (30% for abundant items, 65% for rare items); the funds are
+    held until the buyer receives the goods, then released to the seller."""
+    REQUIRED = "required"
+    DEPOSITED = "deposited"
+    HELD = "held"
+    RELEASED = "released"
+    REFUNDED = "refunded"
 
 
 class Appointment(Base):
@@ -170,6 +185,10 @@ class BulkingRegister(Base):
     currency = Column(String(10), default="USD")
     region = Column(String(255), nullable=True)
     sourcing_mode = Column(SAEnum(SourcingMode, native_enum=False), default=SourcingMode.SELF)
+    # The entity (cooperative / company) that supplies the item through its member
+    # users. Used to block same-company self-certification during the pipeline.
+    sourcing_entity_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    sourcing_entity_name = Column(String(255), nullable=True)
     status = Column(SAEnum(RegisterStatus, native_enum=False), default=RegisterStatus.DRAFT)
     generated = Column(Boolean, default=False)
     notes = Column(Text, nullable=True)
@@ -178,6 +197,7 @@ class BulkingRegister(Base):
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     buyer = relationship("User", foreign_keys=[buyer_id])
+    sourcing_entity = relationship("User", foreign_keys=[sourcing_entity_id])
     item = relationship("TaxonomyItem")
     tenant = relationship("Tenant", back_populates="bulking_registers")
     contacts = relationship("BulkingContact", back_populates="register", cascade="all, delete-orphan")
@@ -187,6 +207,7 @@ class BulkingRegister(Base):
     deals = relationship("Deal", back_populates="register", cascade="all, delete-orphan")
     settlements = relationship("Settlement", back_populates="register", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="register")
+    escrows = relationship("BulkingEscrow", back_populates="register", cascade="all, delete-orphan")
     job_assignments = relationship("BulkingJobAssignment", back_populates="register", cascade="all, delete-orphan")
     packing_records = relationship("PackingRecord", back_populates="register", cascade="all, delete-orphan")
 
@@ -271,6 +292,9 @@ class CourierJob(Base):
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     pickup_location = Column(String(255), nullable=True)
     dropoff_warehouse_id = Column(Integer, ForeignKey("warehouses.id"), nullable=True, index=True)
+    # Final leg: when True the stock is moved directly to the investing buyer
+    # ("received the items they paid for"). Reaching DELIVERED releases escrow.
+    deliver_to_buyer = Column(Boolean, default=False)
     quantity = Column(Float, nullable=True)
     unit = Column(String(50), nullable=True)
     weight_kg = Column(Float, nullable=True)
@@ -380,9 +404,10 @@ class Settlement(Base):
 
 
 class BulkingJobAssignment(Base):
-    """A user from the item's locus assigned a pipeline role — Clerk, Verifier or
-    Courier — for a bulking register. Job assignments drive the receiving,
-    inspection/certification and transport stages of the bulking pipeline."""
+    """A user from the item's locus assigned a pipeline role — Clerk, Verifier,
+    Packer, Certifier or Courier — for a bulking register. Job assignments drive
+    the receiving, inspection, packing, certification and transport stages of
+    the bulking pipeline."""
     __tablename__ = "bulking_job_assignments"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -433,3 +458,31 @@ class PackingRecord(Base):
     item = relationship("TaxonomyItem")
     tenant = relationship("Tenant", back_populates="packing_records")
     packed_by = relationship("User")
+
+
+class BulkingEscrow(Base):
+    """Investor escrow on a bulking register. The investing buyer deposits a
+    percentage of the deal value up front — 30% for abundant items, 65% for
+    rare items — before the pipeline runs. Funds are released to the seller
+    once the buyer receives the goods (buyer-delivery courier job DELIVERED)."""
+    __tablename__ = "bulking_escrows"
+
+    id = Column(Integer, primary_key=True, index=True)
+    register_id = Column(Integer, ForeignKey("bulking_registers.id"), nullable=False, index=True)
+    item_id = Column(Integer, ForeignKey("taxonomy_items.id"), nullable=False, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    payer_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    percentage = Column(Numeric(5, 2), nullable=False)
+    amount = Column(MONEY, nullable=False)
+    currency = Column(String(10), default="USD")
+    status = Column(SAEnum(EscrowStatus, native_enum=False), default=EscrowStatus.REQUIRED)
+    payment_id = Column(Integer, ForeignKey("commerce_payments.id"), nullable=True, index=True)
+    deposited_at = Column(DateTime(timezone=True), nullable=True)
+    released_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    register = relationship("BulkingRegister", back_populates="escrows")
+    item = relationship("TaxonomyItem")
+    payer = relationship("User", foreign_keys=[payer_id])
+    tenant = relationship("Tenant", back_populates="bulking_escrows")
+    payment = relationship("Payment", foreign_keys=[payment_id])

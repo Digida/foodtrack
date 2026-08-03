@@ -16,6 +16,7 @@ from jose import jwt, JWTError
 from itsdangerous import URLSafeTimedSerializer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 
 from app.config import settings
 from app.models.user import User, UserRole, UserType
@@ -130,6 +131,10 @@ async def register_user(db: AsyncSession, email: str, password: str, full_name: 
     existing = await db.execute(select(User).where(User.email == email))
     if existing.scalar_one_or_none():
         raise ValueError("Email already registered")
+    if phone:
+        dup = await db.execute(select(User).where(User.phone == phone))
+        if dup.scalar_one_or_none():
+            raise ValueError("Phone number already registered")
     if len(password) < 8:
         raise ValueError("Password must be at least 8 characters")
     user = User(
@@ -138,7 +143,11 @@ async def register_user(db: AsyncSession, email: str, password: str, full_name: 
         tenant_id=tenant_id, user_type=UserType.ORGANIZATION,
     )
     db.add(user)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise ValueError("Email or phone number already registered")
     await db.refresh(user)
     token = create_access_token(_user_token_payload(user))
     return user, token

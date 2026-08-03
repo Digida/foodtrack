@@ -1,9 +1,19 @@
+import enum
 from datetime import datetime, timezone
 
 from sqlalchemy import Column, Integer, String, Text, DateTime, Float, Boolean, ForeignKey, JSON, func
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import relationship
 
 from app.database import Base
+
+
+class ItemSupplyBand(str, enum.Enum):
+    """How readily available an item is in the market. Drives investor escrow
+    requirements on bulking deals: ABUNDANT items carry a lower deposit than
+    scarce/RARE items."""
+    ABUNDANT = "abundant"
+    RARE = "rare"
 
 
 class ItemIdentifierLog(Base):
@@ -75,6 +85,7 @@ class TaxonomyItem(Base):
     local_uses = Column(Text, nullable=True)
     description = Column(Text, nullable=True)
     image_url = Column(String(500), nullable=True)
+    supply_band = Column(SAEnum(ItemSupplyBand, native_enum=False), nullable=True)
     qr_seed = Column(String(64), nullable=True, unique=True, index=True)
     nfc_uid_template = Column(String(255), nullable=True)
     barcode_prefix = Column(String(12), nullable=True)

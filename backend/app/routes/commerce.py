@@ -28,6 +28,7 @@ from app.services.commerce_service import (
     calculate_settlements, list_settlements, mark_settlement_paid,
     initiate_payment, confirm_payment, list_payments, list_payment_methods,
     get_business_dashboard,
+    get_escrow_requirement, deposit_escrow, get_pipeline_trace,
     list_job_candidates, create_job_assignment, list_job_assignments,
     update_job_assignment_status,
     create_packing_record, list_packing_records, update_packing_status,
@@ -116,6 +117,8 @@ class RegisterCreate(BaseModel):
     region: str | None = None
     sourcing_mode: SourcingMode = SourcingMode.SELF
     auto_generate: bool = False
+    sourcing_entity_id: int | None = None
+    sourcing_entity_name: str | None = None
     notes: str | None = None
 
 
@@ -135,6 +138,8 @@ async def api_create_register(
             title=req.title, unit=req.unit, target_price=req.target_price,
             currency=req.currency, region=req.region,
             sourcing_mode=req.sourcing_mode, auto_generate=req.auto_generate,
+            sourcing_entity_id=req.sourcing_entity_id,
+            sourcing_entity_name=req.sourcing_entity_name,
             notes=req.notes,
         )
     except (ValueError, PermissionError) as e:
@@ -179,6 +184,57 @@ async def api_update_register_status(
     except (ValueError, PermissionError) as e:
         _raise(e)
     return {"id": register.id, "status": register.status.value}
+
+
+# ── Escrow & pipeline trace ─────────────────────────────────────────────────
+
+class EscrowDeposit(BaseModel):
+    method: PaymentMethod = PaymentMethod.BANK_TRANSFER
+
+
+@router.get("/registers/{register_id}/escrow")
+async def api_get_escrow_requirement(
+    register_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await get_escrow_requirement(db, user, register_id)
+    except (ValueError, PermissionError) as e:
+        _raise(e)
+
+
+@router.post("/registers/{register_id}/escrow/deposit")
+async def api_deposit_escrow(
+    register_id: int,
+    req: EscrowDeposit,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        escrow = await deposit_escrow(db, user, register_id, method=req.method)
+    except (ValueError, PermissionError) as e:
+        _raise(e)
+    return {
+        "id": escrow.id,
+        "percentage": float(escrow.percentage),
+        "amount": float(escrow.amount),
+        "currency": escrow.currency or "USD",
+        "status": escrow.status.value,
+        "payment_id": escrow.payment_id,
+    }
+
+
+@router.get("/registers/{register_id}/pipeline")
+async def api_get_pipeline_trace(
+    register_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await get_pipeline_trace(db, user, register_id)
+    except (ValueError, PermissionError) as e:
+        _raise(e)
 
 
 # ── Contacts ───────────────────────────────────────────────────────────────
@@ -367,6 +423,7 @@ class CourierJobCreate(BaseModel):
     budget: float | None = None
     currency: str = "USD"
     courier_name: str | None = None
+    deliver_to_buyer: bool = False
 
 
 class CourierJobStatusUpdate(BaseModel):
@@ -386,6 +443,7 @@ async def api_post_courier_job(
             item_id=req.item_id, dropoff_warehouse_id=req.dropoff_warehouse_id,
             quantity=req.quantity, unit=req.unit, weight_kg=req.weight_kg,
             budget=req.budget, currency=req.currency, courier_name=req.courier_name,
+            deliver_to_buyer=req.deliver_to_buyer,
         )
     except (ValueError, PermissionError) as e:
         _raise(e)

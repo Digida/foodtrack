@@ -1,0 +1,12 @@
+{
+  "name": "foodtrack-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "npx playwright test --timeout=60000"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.36.0",
+    "puppeteer": "^21.0.0"
+  }
+}

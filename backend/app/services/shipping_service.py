@@ -28,12 +28,12 @@ async def list_shipments(db: AsyncSession, page: int = 1, status: str | None = N
     for s in items:
         origin = await db.get(Warehouse, s.origin_id) if s.origin_id else None
         dest = await db.get(Warehouse, s.destination_id) if s.destination_id else None
-        batch_count = await db.execute(
+        batch_count = (await db.execute(
             select(func.count()).select_from(ShipmentBatch).where(ShipmentBatch.shipment_id == s.id)
-        )
-        tracking_count = await db.execute(
+        )).scalar() or 0
+        tracking_count = (await db.execute(
             select(func.count()).select_from(ShipmentTrackingEvent).where(ShipmentTrackingEvent.shipment_id == s.id)
-        )
+        )).scalar() or 0
         result.append({
             "id": s.id, "shipment_number": s.shipment_number,
             "mode": s.mode.value if hasattr(s.mode, 'value') else str(s.mode),
@@ -48,8 +48,8 @@ async def list_shipments(db: AsyncSession, page: int = 1, status: str | None = N
             "estimated_arrival": str(s.estimated_arrival) if s.estimated_arrival else None,
             "actual_departure": str(s.actual_departure) if s.actual_departure else None,
             "actual_arrival": str(s.actual_arrival) if s.actual_arrival else None,
-            "batch_count": (await batch_count).scalar() or 0,
-            "tracking_count": (await tracking_count).scalar() or 0,
+            "batch_count": batch_count,
+            "tracking_count": tracking_count,
             "created_at": str(s.created_at) if s.created_at else None,
         })
     return {"shipments": result, "total": total, "page": page, "total_pages": max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)}

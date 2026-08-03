@@ -18,7 +18,9 @@ async def list_warehouses(db: AsyncSession, page: int = 1):
     items = (await db.execute(q.offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE).order_by(Warehouse.name))).scalars().all()
     result = []
     for w in items:
-        item_count = await db.execute(select(func.count()).select_from(WarehouseItem).where(WarehouseItem.warehouse_id == w.id))
+        item_count = (await db.execute(
+            select(func.count()).select_from(WarehouseItem).where(WarehouseItem.warehouse_id == w.id)
+        )).scalar() or 0
         result.append({
             "id": w.id, "code": w.code, "name": w.name,
             "address": w.address, "city": w.city, "country": w.country,
@@ -27,7 +29,7 @@ async def list_warehouses(db: AsyncSession, page: int = 1):
             "humidity_percent": w.humidity_percent,
             "contact_name": w.contact_name, "contact_phone": w.contact_phone,
             "lat": w.lat, "lng": w.lng,
-            "item_count": (await db.execute(item_count)).scalar() or 0,
+            "item_count": item_count,
             "created_at": str(w.created_at) if w.created_at else None,
         })
     return {"warehouses": result, "total": total, "page": page, "total_pages": max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)}

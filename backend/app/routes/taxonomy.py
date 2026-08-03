@@ -104,6 +104,7 @@ class ItemCreate(BaseModel):
     local_uses: str | None = None
     description: str | None = None
     image_url: str | None = None
+    supply_band: str | None = None
 
 
 class ItemUpdate(BaseModel):
@@ -120,6 +121,7 @@ class ItemUpdate(BaseModel):
     description: str | None = None
     image_url: str | None = None
     is_active: bool | None = None
+    supply_band: str | None = None
 
 
 class NameCreate(BaseModel):
@@ -265,6 +267,7 @@ async def api_create_item(
         item = await create_item(
             db, req.node_id, req.code, req.common_name,
             req.scientific_name, req.genre, req.description, req.image_url,
+            req.supply_band,
         )
         return {"id": item.id, "code": item.code, "common_name": item.common_name}
     except (ValueError, PermissionError) as e:
