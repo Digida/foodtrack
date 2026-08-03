@@ -235,13 +235,19 @@ async def _alembic_head(backend_dir: Path) -> str | None:
             text=True,
         ),
     )
+    heads: list[str] = []
     for line in result.stdout.splitlines():
         stripped = line.strip()
         if stripped and not stripped.startswith("INFO"):
             rev = stripped.split(" ")[0]
             if len(rev) >= 8:
-                return rev
-    return None
+                heads.append(rev)
+    if len(heads) > 1:
+        raise RuntimeError(
+            f"Alembic has multiple heads ({', '.join(heads)}) — "
+            "merge them before migrating"
+        )
+    return heads[0] if heads else None
 
 
 # ── Seeding ───────────────────────────────────────────────────────────────────
