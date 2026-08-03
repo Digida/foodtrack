@@ -353,11 +353,16 @@ Pages.login = (app) => {
     app.innerHTML = `
       <div class="auth-container">
         <div class="auth-card">
+          <div class="auth-nav">
+            <a href="#home" class="auth-nav-link">&#8592; ${I18n.t('footer.home')}</a>
+            <a href="#" id="auth-back" class="auth-nav-link">&#8592; ${I18n.t('common.back')}</a>
+          </div>
           <div class="logo">Food<span>Track</span></div>
           <p>${isRegister ? 'Create your account' : 'Digital Trust Infrastructure'}</p>
           <div id="auth-form"></div>
         </div>
       </div>`;
+    document.getElementById('auth-back').onclick = (e) => { e.preventDefault(); Router.goBack(); };
     const f = document.getElementById('auth-form');
     if (isRegister) {
       f.innerHTML = `
@@ -442,12 +447,17 @@ Pages.mfaVerify = (app, params) => {
   app.innerHTML = `
     <div class="auth-container">
       <div class="auth-card">
+        <div class="auth-nav">
+          <a href="#home" class="auth-nav-link">&#8592; ${I18n.t('footer.home')}</a>
+          <a href="#" id="auth-back" class="auth-nav-link">&#8592; ${I18n.t('common.back')}</a>
+        </div>
         <div class="logo">Food<span>Track</span></div>
         <p>Enter ${type.toUpperCase()} verification code</p>
         <div class="form-group"><label>Code</label><input id="mfa-code" class="fi" placeholder="000000" maxlength="6"></div>
         <button class="btn btn-primary btn-block" id="mfa-btn">Verify</button>
       </div>
     </div>`;
+  document.getElementById('auth-back').onclick = (e) => { e.preventDefault(); Router.goBack(); };
   document.getElementById('mfa-btn').onclick = async () => {
     if (!UI.validateForm({
       'mfa-code': { required: true, pattern: /^\d{6}$/, message: 'Enter a 6-digit code' },

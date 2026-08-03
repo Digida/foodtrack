@@ -1,11 +1,19 @@
 const Router = {
   routes: {},
+  previousHash: '#home',
   add: (pattern, handler) => { Router.routes[pattern] = handler; },
 
   navigate(path) {
     const hash = path.startsWith('#') ? path : '#' + path;
+    if (window.location.hash) Router.previousHash = window.location.hash;
     if (window.location.hash === hash) this.resolve();
     else window.location.hash = hash;
+  },
+
+  goBack() {
+    const current = window.location.hash || '#home';
+    const target = Router.previousHash && Router.previousHash !== current ? Router.previousHash : '#home';
+    this.navigate(target);
   },
 
   init() {
@@ -29,6 +37,7 @@ const Router = {
       if (match) {
         app.innerHTML = '<div class="spinner" style="margin:80px auto"></div>';
         handler(app, ...match.slice(1), params);
+        app.querySelector(':scope > .spinner')?.remove();
         return;
       }
     }

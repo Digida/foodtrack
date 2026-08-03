@@ -262,6 +262,9 @@ a:hover { text-decoration: underline; }
 .auth-card p { color: var(--text-light); margin-bottom: 24px; font-size: 14px; }
 .auth-card .logo { font-size: 32px; font-weight: 800; color: var(--primary); letter-spacing: -1px; margin-bottom: 8px; }
 .auth-card .logo span { color: var(--accent); }
+.auth-nav { display: flex; justify-content: space-between; margin-bottom: 20px; gap: 8px; }
+.auth-nav-link { font-size: 13px; font-weight: 600; color: var(--text-light); text-decoration: none; }
+.auth-nav-link:hover { color: var(--primary); }
 
 .form-group { margin-bottom: 16px; }
 .form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--text); }
