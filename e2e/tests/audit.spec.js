@@ -7,21 +7,26 @@ function rand() { return crypto.randomBytes(6).toString('hex'); }
 // Guarded (auth-protected) routes -> expected topbar title
 const GUARDED = {
   'dashboard': 'Dashboard',
-  'products': 'Products',
-  'traceability': 'Traceability',
-  'certificates': 'Certificates',
   'analytics': 'Analytics',
-  'share': 'Share & Compare',
-  'taxonomy': 'Taxonomies',
   'batches': 'Batches',
-  'warehouses': 'Warehouses',
   'shipments': 'Shipments',
-  'collections': 'Collections',
   'feeds': 'AI Feeds',
-  'food-items': 'Food Items',
   'cargo-tracking': 'Cargo Tracking',
   'bulking': 'Bulking',
   'settings': 'Settings',
+};
+
+// Guest-open routes (sidebar shell, no auth required) -> expected content selector
+const OPEN = {
+  'products': '#prod-table',
+  'traceability': '#trace-q',
+  'certificates': '#cert-table',
+  'share': '#share-sku',
+  'taxonomy': '.card',
+  'warehouses': '#warehouses-content',
+  'collections': '.collection-card',
+  'food-items': '#food-search-input',
+  'search': '#search-input',
 };
 
 const PUBLIC = {
@@ -88,6 +93,16 @@ test.describe('Routing & wiring audit', () => {
       await page.goto(`/#${route}`);
       await assert(page);
       assertClean(issues, `public page #${route}`);
+    }
+  });
+
+  test('guest-open routes render for unauthenticated users without redirect or errors', async ({ page }) => {
+    for (const [route, selector] of Object.entries(OPEN)) {
+      const issues = trackErrors(page);
+      await page.goto(`/#${route}`);
+      await expect(page, `route #${route} should stay on the page`).toHaveURL(new RegExp('#'.concat(route, '$')));
+      await expect(page.locator(selector).first()).toBeVisible();
+      assertClean(issues, `guest-open route #${route}`);
     }
   });
 

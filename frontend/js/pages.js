@@ -522,7 +522,7 @@ Pages.taxonomyDetail = (app, id) => {
     const isAdmin = Auth.getUser()?.role === 'admin';
     const body = document.createElement('div');
     body.innerHTML = `<div class="card"><div class="card-header"><h3>${taxData.icon || ''} ${taxData.name}</h3>
-      <div><button class="btn btn-sm btn-outline" id="add-node-btn">+ Add Category</button></div></div>
+      ${isAdmin ? '<div><button class="btn btn-sm btn-outline" id="add-node-btn">+ Add Category</button></div>' : '<div></div>'}</div>
       <p style="color:var(--text-light)">${taxData.description || ''}</p></div>
       <div id="tax-tree" style="margin-top:16px"><div class="spinner"></div></div>
       <div id="tax-items" style="margin-top:16px"></div>`;
@@ -544,7 +544,7 @@ Pages.taxonomyDetail = (app, id) => {
     }
 
     function renderTreeView() {
-      const container = document.getElementById('tax-tree');
+      const container = body.querySelector('#tax-tree');
       container.innerHTML = renderTree(treeData.tree || []);
       container.querySelectorAll('.node-toggle').forEach(el => {
         el.addEventListener('click', () => {
@@ -562,7 +562,7 @@ Pages.taxonomyDetail = (app, id) => {
     }
 
     async function loadItems(nodeId) {
-      const container = document.getElementById('tax-items');
+      const container = body.querySelector('#tax-items');
       container.innerHTML = '<div class="spinner"></div>';
       try {
         const data = await API.get(`/taxonomy/nodes/${nodeId}/items`);
@@ -758,9 +758,9 @@ Pages.products = (app) => {
         });
       }
       html += '</tbody></table></div>';
-      const tableDiv = document.getElementById('prod-table');
+      const tableDiv = body.querySelector('#prod-table');
       if (tableDiv) tableDiv.innerHTML = html;
-      const searchEl = document.getElementById('prod-search');
+      const searchEl = body.querySelector('#prod-search');
       if (searchEl) {
         searchEl.addEventListener('input', (e) => renderTable(e.target.value));
         searchEl.focus();
@@ -769,7 +769,7 @@ Pages.products = (app) => {
     body.innerHTML = '<div id="prod-table"></div>';
     renderTable('');
     const tb = document.getElementById('topbar-actions');
-    if (tb) tb.innerHTML = '<button class="btn btn-primary btn-sm" onclick="Pages.showCreateProduct()">+ New Product</button>';
+    if (tb && Auth.isLoggedIn()) tb.innerHTML = '<button class="btn btn-primary btn-sm" onclick="Pages.showCreateProduct()">+ New Product</button>';
     return body;
   }));
 };
@@ -849,7 +849,7 @@ Pages.productDetail = (app, id) => {
     body.innerHTML = `
       <div class="card-grid card-grid-2">
         <div class="card"><div class="card-header"><h3>Product Information</h3>
-          <div style="display:flex;gap:8px">${Auth.getUser()?.role === 'admin' ? '<button class="btn btn-sm btn-danger" id="delete-product-btn">Delete</button>' : ''}<button class="btn btn-sm btn-outline" id="edit-product-btn">Edit</button></div></div>
+          <div style="display:flex;gap:8px">${Auth.getUser()?.role === 'admin' ? '<button class="btn btn-sm btn-danger" id="delete-product-btn">Delete</button>' : ''}${Auth.isLoggedIn() ? '<button class="btn btn-sm btn-outline" id="edit-product-btn">Edit</button>' : ''}</div></div>
           <table style="width:100%;font-size:14px">${[
             ['SKU', p.sku], ['Name', p.name], ['Category', p.category], ['Origin', `${p.origin_country||'—'} ${p.origin_region ? '/ '+p.origin_region : ''}`],
             ['Producer', p.producer_name||'—'], ['Weight', p.weight_kg ? p.weight_kg+' kg' : '—'], ['Storage', p.storage_requirements||'—'],
@@ -862,7 +862,7 @@ Pages.productDetail = (app, id) => {
             ${p.nfc_tag_id ? `<div class="code-display"><div style="font-size:32px">📶</div><div style="font-size:11px;color:#6b7280">NFC: ${p.nfc_tag_id}</div></div>` : ''}
           </div></div></div>
       <div class="card" style="margin-top:20px"><div class="card-header"><h3>Traceability Timeline (${evts.length} events)</h3>
-        <button class="btn btn-accent btn-sm" onclick="Pages.showAddEvent(${id})">+ Add Event</button></div>
+        ${Auth.isLoggedIn() ? `<button class="btn btn-accent btn-sm" onclick="Pages.showAddEvent(${id})">+ Add Event</button>` : ''}</div>
         ${evts.length === 0 ? '<div style="text-align:center;padding:24px;color:#6b7280">No events recorded</div>' :
           `<div class="timeline">${evts.map(e => `
             <div class="timeline-item">
@@ -879,7 +879,7 @@ Pages.productDetail = (app, id) => {
         } catch (e) { UI.showError(e.message); }
       }
     });
-    body.querySelector('#edit-product-btn').onclick = () => Pages.showEditProduct(id, p);
+    body.querySelector('#edit-product-btn')?.addEventListener('click', () => Pages.showEditProduct(id, p));
     return body;
   }));
 };
@@ -997,15 +997,15 @@ Pages.certificates = (app) => {
         });
       }
       html += '</tbody></table></div>';
-      const tableDiv = document.getElementById('cert-table');
+      const tableDiv = body.querySelector('#cert-table');
       if (tableDiv) tableDiv.innerHTML = html;
-      const searchEl = document.getElementById('cert-search');
+      const searchEl = body.querySelector('#cert-search');
       if (searchEl) searchEl.addEventListener('input', (e) => renderTable(e.target.value));
     };
     body.innerHTML = '<div id="cert-table"></div>';
     renderTable('');
     const tc = document.getElementById('topbar-actions');
-    if (tc) tc.innerHTML = '<button class="btn btn-primary btn-sm" onclick="Pages.showIssueCert()">+ Issue Certificate</button>';
+    if (tc && Auth.isLoggedIn()) tc.innerHTML = '<button class="btn btn-primary btn-sm" onclick="Pages.showIssueCert()">+ Issue Certificate</button>';
     return body;
   }));
 };
@@ -1044,7 +1044,7 @@ Pages.certificateDetail = (app, id) => {
     body.innerHTML = `
       <div class="card"><div class="card-header"><h3>Certificate ${c.certificate_id}</h3>
         <div style="display:flex;gap:8px;align-items:center">
-          ${c.status === 'issued' ? `<button class="btn btn-sm btn-success" onclick="Pages.verifyCert('${c.certificate_id}')" style="background:#28a745;color:#fff;border:none">✓ Verify</button>` : ''}
+          ${c.status === 'issued' && Auth.isLoggedIn() ? `<button class="btn btn-sm btn-success" onclick="Pages.verifyCert('${c.certificate_id}')" style="background:#28a745;color:#fff;border:none">✓ Verify</button>` : ''}
           ${c.status !== 'revoked' && Auth.getUser()?.role === 'admin' ? `<button class="btn btn-sm btn-danger" id="revoke-cert-btn">Revoke</button>` : ''}
           ${c.status === 'verified' ? `<span class="badge badge-success">VERIFIED</span>` : `<span class="badge ${c.status === 'issued' ? 'badge-info' : c.status === 'revoked' ? 'badge-danger' : 'badge-secondary'}">${c.status.toUpperCase()}</span>`}
         </div></div>
@@ -1502,16 +1502,16 @@ Pages.showChangePassword = () => {
 
 Pages.search = (app, query) => {
   const isAuth = Auth.isLoggedIn();
-  const layoutFn = isAuth ? UI.layout : (bodyFn) => UI.publicLayout(bodyFn);
-  const title = query ? `Search: ${query}` : 'Search';
-  app.appendChild(layoutFn(title, async () => {
+  const q = typeof query === 'string' ? query : '';
+  const title = q ? `Search: ${q}` : 'Search';
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const renderBody = async () => {
     const body = document.createElement('div');
-    const q = query || '';
     body.innerHTML = `
       <div class="card">
         <form id="search-form" style="display:flex;gap:8px">
           <div class="autocomplete-wrap" style="flex:1">
-            <input id="search-input" class="fi" placeholder="Search taxonomy items, products, batches, warehouses, collections..." style="width:100%" value="${q.replace(/"/g, '"')}">
+            <input id="search-input" class="fi" placeholder="Search taxonomy items, products, batches, warehouses, collections..." style="width:100%" value="${esc(q)}">
             <div class="autocomplete-dropdown" id="search-ac-dropdown"></div>
           </div>
           <button class="btn btn-primary" id="search-btn">🔍 Search</button>
@@ -1700,9 +1700,18 @@ Pages.search = (app, query) => {
       doSearch(1);
     });
 
-    if (q) { body.querySelector('#search-btn').click(); }
+    if (q) {
+      const runSearch = () => {
+        if (body.isConnected) doSearch(1);
+        else requestAnimationFrame(runSearch);
+      };
+      requestAnimationFrame(runSearch);
+    }
     return body;
-  }));
+  };
+
+  if (isAuth) app.appendChild(UI.layout(title, renderBody));
+  else app.appendChild(UI.publicLayout(renderBody));
 };
 
 // ─── BULKING PIPELINE ───────────────────────────────────────────
@@ -2661,7 +2670,7 @@ Pages.warehouses = (app) => {
       if (!el) return;
       let html = `<div class="list-header">
         <p style="color:var(--text-light)">${data.total} warehouse(s)</p>
-        <button class="btn btn-primary btn-sm" id="add-wh-btn">+ New Warehouse</button></div>
+        ${Auth.isLoggedIn() ? '<button class="btn btn-primary btn-sm" id="add-wh-btn">+ New Warehouse</button>' : ''}</div>
         <div class="card-grid card-grid-3">`;
       if (!data.warehouses || data.warehouses.length === 0) {
         html += '<p style="color:var(--text-light)">No warehouses yet</p>';
@@ -2740,7 +2749,7 @@ Pages.warehouseDetail = (app, id) => {
       </div>
       <div class="card" style="margin-top:16px">
         <div class="card-header"><h3>Inventory (${(data.items || []).length} items)</h3>
-        <button class="btn btn-sm btn-primary" id="add-inv-btn">+ Add Stock</button></div>
+        ${Auth.isLoggedIn() ? '<button class="btn btn-sm btn-primary" id="add-inv-btn">+ Add Stock</button>' : ''}</div>
         <div class="table-container"><table><thead><tr><th>Batch</th><th>Qty</th><th>Zone</th><th>Rack</th><th>Bin</th><th>Last Counted</th></tr></thead>
         <tbody>${itemsHtml || '<tr><td colspan="6" style="text-align:center;color:var(--text-light)">No inventory</td></tr>'}</tbody></table></div>
       </div>
@@ -2957,7 +2966,7 @@ Pages.collections = (app) => {
       <p style="color:var(--text-light)">${data.total} collection(s)</p>
       <div style="display:flex;gap:8px">
         <button class="btn btn-outline btn-sm" onclick="Router.navigate('#feeds')">🤖 AI Feeds</button>
-        <button class="btn btn-primary btn-sm" id="add-col-btn">+ New Collection</button>
+        ${Auth.isLoggedIn() ? '<button class="btn btn-primary btn-sm" id="add-col-btn">+ New Collection</button>' : ''}
       </div></div>
       <div class="card-grid card-grid-3">`;
     if (!data.collections || data.collections.length === 0) {
@@ -3035,7 +3044,7 @@ Pages.collectionDetail = (app, id) => {
       </div>
       <div class="card" style="margin-top:16px">
         <div class="card-header"><h3>📦 Items in this Collection</h3>
-          <button class="btn btn-sm btn-primary" id="add-col-item-btn">+ Add Item</button>
+          ${Auth.isLoggedIn() ? '<button class="btn btn-sm btn-primary" id="add-col-item-btn">+ Add Item</button>' : ''}
         </div>
         ${itemsHtml}
       </div>

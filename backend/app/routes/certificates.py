@@ -52,7 +52,7 @@ async def api_issue_certificate(
 async def api_list_certificates(
     status: CertificateStatus | None = None,
     type: CertificateType | None = None,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     certs = await list_certificates(db, status, type)
@@ -89,7 +89,7 @@ async def api_get_request(
 @router.get("/{certificate_id}")
 async def api_get_certificate(
     certificate_id: str,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_guest),
     db: AsyncSession = Depends(get_db),
 ):
     cert = await get_certificate(db, certificate_id)
