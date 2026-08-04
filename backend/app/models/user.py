@@ -7,6 +7,18 @@ import enum
 from app.database import Base
 
 
+def enum_values(enum_cls: type[enum.Enum]) -> list[str]:
+    """Persist enum member *values* (lowercase) instead of member names.
+
+    SAEnum on a str-mixin enum stores and validates against the member NAME by
+    default ('ORGANIZATION'), which mismatches the lowercase values the app
+    contract, migration server_defaults and the seeded/registered data use
+    ('organization'). Using values_callable keeps the DB rows lowercase and
+    makes loading them a no-op instead of a LookupError.
+    """
+    return [member.value for member in enum_cls]
+
+
 class UserRole(str, enum.Enum):
     SUPERUSER = "superuser"
     ADMIN = "admin"
@@ -43,8 +55,8 @@ class User(Base):
     phone = Column(String(50), unique=True, nullable=True)
     full_name = Column(String(255), nullable=False)
     company = Column(String(255), nullable=True)
-    role = Column(SAEnum(UserRole, native_enum=False), default=UserRole.VIEWER, nullable=False)
-    user_type = Column(SAEnum(UserType, native_enum=False), default=UserType.ORGANIZATION, nullable=False)
+    role = Column(SAEnum(UserRole, native_enum=False, values_callable=enum_values), default=UserRole.VIEWER, nullable=False)
+    user_type = Column(SAEnum(UserType, native_enum=False, values_callable=enum_values), default=UserType.ORGANIZATION, nullable=False)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     hashed_password = Column(String(255), nullable=False)
     # Secondary contact details (used for e.g. alternate email / alternate phone)
