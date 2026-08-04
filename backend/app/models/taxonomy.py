@@ -6,6 +6,7 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import relationship
 
 from app.database import Base
+from app.models.user import enum_values
 
 
 class ItemSupplyBand(str, enum.Enum):
@@ -122,3 +123,43 @@ class ItemAttribute(Base):
     unit = Column(String(100), nullable=True)
 
     item = relationship("TaxonomyItem", back_populates="attributes")
+
+
+class SuggestionStatus(str, enum.Enum):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+
+
+class TaxonomySuggestion(Base):
+    """Community faucet — an authed user proposes additional taxonomy info
+    (a name in some language, an attribute, an item-field correction, or an
+    entirely missing item under a category). Admins review and either accept
+    (applies the change to the catalog) or reject it."""
+
+    __tablename__ = "taxonomy_suggestions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    item_id = Column(Integer, ForeignKey("taxonomy_items.id"), nullable=True, index=True)
+    node_id = Column(Integer, ForeignKey("taxonomy_nodes.id"), nullable=True, index=True)
+    # name | attribute | field | missing_item
+    kind = Column(String(20), nullable=False)
+    language = Column(String(10), nullable=True)
+    key = Column(String(255), nullable=True)
+    value = Column(Text, nullable=False)
+    unit = Column(String(100), nullable=True)
+    status = Column(
+        SAEnum(SuggestionStatus, native_enum=False, values_callable=enum_values),
+        default=SuggestionStatus.PENDING,
+        nullable=False,
+    )
+    suggested_by = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    review_note = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+
+    item = relationship("TaxonomyItem")
+    node = relationship("TaxonomyNode")
+    suggester = relationship("User", foreign_keys=[suggested_by])
+    reviewer = relationship("User", foreign_keys=[reviewed_by])

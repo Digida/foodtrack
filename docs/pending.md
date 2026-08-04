@@ -112,6 +112,24 @@ The `TaxonomyItem` model is the foundation. It already has biological classifica
 
 ---
 
+### ▶ 1b. Community Taxonomy Suggestions — authed faucet + admin moderation ✅ [BUILT]
+
+Authed users propose taxonomy info (multilingual names, attributes, item-field corrections, or missing items); admins review and accept (applied to the catalog) or reject. This is the human faucet beside AI enrichment (P12) — AI comes later, humans first.
+
+- ✅ `TaxonomySuggestion` model — kind (`name`/`attribute`/`field`/`missing_item`), language, key, value, unit, status (`pending`/`accepted`/`rejected`), suggested_by, reviewed_by, review_note, timestamps (`backend/app/models/taxonomy.py`)
+- ✅ `backend/app/services/taxonomy_suggestion_service.py` — `create_suggestion`, `list_suggestions`, `list_my_suggestions`, `accept_suggestion` (applies: adds `ItemName`/`ItemAttribute`, patches item field, or creates a `SUG-…` item under the node), `reject_suggestion`; idempotent applies (skips exact duplicates)
+- ✅ `backend/app/routes/taxonomy_suggestions.py` — registered before the taxonomy router in `main.py` so `/taxonomy/suggestions` isn't swallowed by `/{taxonomy_id}`
+- ✅ Alembic migration `c3d4e5f6a7b8` — `taxonomy_suggestions` table (current head)
+
+**API endpoints:**
+- ✅ `POST /api/v1/taxonomy/suggestions` — any authed user submits a suggestion (401 anonymous)
+- ✅ `GET /api/v1/taxonomy/suggestions/mine` — authed user sees their own submissions
+- ✅ `GET /api/v1/taxonomy/suggestions?status=&item_id=` — admin moderation queue (403 for non-admin)
+- ✅ `POST /api/v1/taxonomy/suggestions/{id}/accept` — admin accepts, applies change (404 unknown, 400 already-reviewed)
+- ✅ `POST /api/v1/taxonomy/suggestions/{id}/reject` — admin rejects with optional note
+
+---
+
 ### ▶ 2. Item Storage Aggregation ✅ [ALREADY BUILT]
 
 ✅ Complete end-to-end: model + service + routes. Built, verified, registered in `main.py`.
@@ -765,6 +783,7 @@ Consumer-facing public verification with full frontend — fully implemented.
 | Phase | Feature | Status | Models | Services | Routes | Tools | Timeline |
 |-------|---------|--------|--------|----------|--------|-------|----------|
 | **1** | Item Detail Engine | ✅ Done | ✅ existing | ✅ `item_detail_service` | ✅ detail/timeline/provenance | ReportAudit, read_url, nutrition_fetcher, translator | Week 1 ✅ |
+| **1b** | Community Taxonomy Suggestions (authed faucet + admin moderation) | ✅ Done | ✅ `TaxonomySuggestion` | ✅ `taxonomy_suggestion_service` | ✅ 5 endpoints | AI later (humans first) | ✅ |
 | **2** | Item Storage Aggregation | ✅ Done | ✅ `ItemInventory`, `InventoryMovement` | ✅ `inventory_service` | ✅ `inventory.py` (8) | ReportAudit, web_search, geocoder, weather_fetcher | Week 2 ✅ |
 | **3** | Item Movement Tracking | ✅ Done | ✅ FKs on 4 models + ItemShipmentStatus | ✅ `item_movement_service` | ✅ `item_movements.py` (7) | web_search, carrier_tracker, eta_predictor, geocoder, weather_fetcher, ReportAudit | Week 3 ✅ |
 | **3b** | Cargo Registration | ✅ Done | ✅ `CargoRegistration` | ✅ `cargo_service` (5) | ✅ `cargo.py` (5) | carrier_tracker, eta_predictor, geocoder, ReportAudit | Week 3 ✅ |
@@ -1293,8 +1312,8 @@ Also uncommitted: `database.py`/`main.py`/`models/__init__.py`/`models/tenant.py
 **1.2 — Anonymous writes minted as the system ADMIN user (P0)**
 `dependencies.py:20,32` creates the `system@foodtrack.local` user with `role=UserRole.ADMIN` for any anonymous request hitting a `get_current_user_or_guest` endpoint. Unauthenticated callers therefore pass every service-layer `role in (ADMIN, ...)` check. Affects all write endpoints in: `products.py`, `traceability.py`, `certificates.py`, `collections.py`, `shipments.py`, `warehouses.py`. Fix: give the system user a restricted role (VIEWER or a dedicated SYSTEM role) and gate writes explicitly.
 
-**1.3 — `taxonomy.py` has zero authentication (P0)**
-All 10 write endpoints are public — no `get_current_user` anywhere: `taxonomy.py:165,177,189,203,215,227,250,287,301,318` (create/update/delete taxonomies, nodes, items, item names, item attributes). Anyone can alter the core catalog.
+**1.3 — `taxonomy.py` write endpoints admin-gated ✅**
+All 10 write endpoints (create/update/delete taxonomies, nodes, items, item names, item attributes) now require `require_admin` (RBAC `users.manage`). Reads (list, tree, detail, by-code, grouped-by-category) stay public — the Food Items browser depends on them. The community faucet (`/taxonomy/suggestions`, see ▶ 1b) is the sanctioned path for non-admin users to feed the catalog: anyone authed can suggest, only admins mutate. AI enrichment is a planned later phase on top of these reads.
 
 **1.4 — API-key middleware is dead code (P0)**
 `middleware/api_key_middleware.py:19` defines `api_key_middleware` but it is **never imported or registered** in `main.py`. `X-API-Key` authentication and the per-key rate limiter do not function. The Developer Portal can mint keys that are never checked.
@@ -1442,7 +1461,7 @@ No coverage for: search, taxonomy writes, products, traceability, batches, wareh
 |---|------|-------|-----|
 | C1 | Fix seeded superuser password (env-var sourced) + remove cleartext log | `user_seed_service.py:14,75,86` | Trivial compromise of every deployment |
 | C2 | Replace system-user `ADMIN` role with restricted role; gate `get_current_user_or_guest` writes | `dependencies.py:20,32`; products/traceability/certificates/collections/shipments/warehouses | Anonymous users can write as ADMIN |
-| C3 | Add auth to all `taxonomy.py` write endpoints | `taxonomy.py:165-318` | Core catalog can be destroyed publicly |
+| C3 | ~~Add auth to all `taxonomy.py` write endpoints~~ ✅ admin-gated | `taxonomy.py` | Core catalog protected |
 | C4 | Wire `api_key_middleware` into `main.py` | `main.py` + middleware | API keys/rate limits are non-functional |
 | C5 | Make `/verify/{code}` public + under `/api/v1` | `verify.py:12-13`, `main.py:246` | Headline public feature is login-gated |
 | C6 | Enforce tenant isolation across services (or consciously mark global-read domains) | warehouse/shipping/batch/collection/insurance/supplier/product/search/analytics | Cross-tenant data exposure |

@@ -5,7 +5,7 @@ from app.models.product import Product, ProductCategory
 from app.models.certificate import Certificate, CertificateStatus, CertificateType, CertificateRequest, CertificateRequestStatus
 from app.models.traceability import TraceabilityEvent, EventType
 from app.models.contact import ContactMessage
-from app.models.taxonomy import Taxonomy, TaxonomyNode, TaxonomyItem, ItemName, ItemAttribute, ItemIdentifierLog, ItemSupplyBand
+from app.models.taxonomy import Taxonomy, TaxonomyNode, TaxonomyItem, ItemName, ItemAttribute, ItemIdentifierLog, ItemSupplyBand, TaxonomySuggestion, SuggestionStatus
 from app.models.tracking import (
     Batch, BatchStatus, Warehouse, WarehouseItem,
     Shipment, ShipmentStatus, ShipmentMode, ShipmentBatch,
@@ -44,6 +44,7 @@ __all__ = [
     "TraceabilityEvent", "EventType",
     "ContactMessage",
     "Taxonomy", "TaxonomyNode", "TaxonomyItem", "ItemName", "ItemAttribute", "ItemIdentifierLog", "ItemSupplyBand",
+    "TaxonomySuggestion", "SuggestionStatus",
     "Batch", "BatchStatus",
     "Warehouse", "WarehouseItem",
     "Shipment", "ShipmentStatus", "ShipmentMode", "ShipmentBatch", "ItemShipmentStatus",

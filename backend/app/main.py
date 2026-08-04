@@ -73,6 +73,7 @@ logging.config.dictConfig(LOGGING_CONFIG)
 logger = logging.getLogger("app")
 from app.routes import (
     auth, products, traceability, certificates, analytics, share, contact, taxonomy,
+    taxonomy_suggestions,
     search, batches, warehouses, shipments, collections, inventory, item_movements,
     codes, health, cargo, verify, compliance, rates, enrichment, continuous_enrichment,
     events, telemetry, developer_portal, gov_integration, arabic_i18n,
@@ -329,6 +330,9 @@ app.include_router(certificates.router, prefix="/api/v1")
 app.include_router(analytics.router, prefix="/api/v1")
 app.include_router(share.router, prefix="/api/v1")
 app.include_router(contact.router, prefix="/api/v1")
+# Suggestions router first so `/taxonomy/suggestions` matches here, not the
+# taxonomy router's `/{taxonomy_id}` catch-all.
+app.include_router(taxonomy_suggestions.router, prefix="/api/v1")
 app.include_router(taxonomy.router, prefix="/api/v1")
 app.include_router(search.router, prefix="/api/v1")
 app.include_router(batches.router, prefix="/api/v1")
