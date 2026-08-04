@@ -467,6 +467,19 @@ def _pkce_pair() -> tuple[str, str]:
     return verifier, challenge
 
 
+def _sso_redirect_uri(provider: str) -> str:
+    """Callback URL used to complete the OAuth flow for a provider.
+
+    Derives the per-provider callback from SITE_URL so that configuring one
+    provider (e.g. GOOGLE via SSO_REDIRECT_URI) never leaks its redirect URI
+    onto another provider's authorize/exchange calls.
+    """
+    derived = f"{settings.SITE_URL}/api/v1/auth/sso/{provider}/callback"
+    if settings.SSO_REDIRECT_URI and settings.SSO_REDIRECT_URI.endswith(f"/sso/{provider}/callback"):
+        return settings.SSO_REDIRECT_URI
+    return derived
+
+
 def list_sso_providers() -> list[dict]:
     """Advertise SSO providers to the frontend.
 
@@ -478,21 +491,21 @@ def list_sso_providers() -> list[dict]:
             "provider": "google",
             "enabled": bool(settings.GOOGLE_CLIENT_ID),
             "client_id": settings.GOOGLE_CLIENT_ID or None,
-            "redirect_uri": settings.SSO_REDIRECT_URI or None,
+            "redirect_uri": _sso_redirect_uri("google"),
             "authorize_endpoint": "/api/v1/auth/sso/google/authorize",
         },
         {
             "provider": "microsoft",
             "enabled": bool(settings.MICROSOFT_CLIENT_ID),
             "client_id": settings.MICROSOFT_CLIENT_ID or None,
-            "redirect_uri": settings.SSO_REDIRECT_URI or None,
+            "redirect_uri": _sso_redirect_uri("microsoft"),
             "authorize_endpoint": "/api/v1/auth/sso/microsoft/authorize",
         },
         {
             "provider": "apple",
             "enabled": bool(settings.APPLE_CLIENT_ID and settings.APPLE_TEAM_ID and settings.APPLE_KEY_ID and settings.APPLE_PRIVATE_KEY),
             "client_id": settings.APPLE_CLIENT_ID or None,
-            "redirect_uri": settings.SSO_REDIRECT_URI or None,
+            "redirect_uri": _sso_redirect_uri("apple"),
             "authorize_endpoint": "/api/v1/auth/sso/apple/authorize",
             "reason": "Requires ES256 key configuration (APPLE_CLIENT_ID / APPLE_TEAM_ID / APPLE_KEY_ID / APPLE_PRIVATE_KEY)",
         },
@@ -500,7 +513,7 @@ def list_sso_providers() -> list[dict]:
             "provider": "github",
             "enabled": bool(settings.GITHUB_CLIENT_ID and settings.GITHUB_CLIENT_SECRET),
             "client_id": settings.GITHUB_CLIENT_ID or None,
-            "redirect_uri": settings.SSO_REDIRECT_URI or None,
+            "redirect_uri": _sso_redirect_uri("github"),
             "authorize_endpoint": "/api/v1/auth/sso/github/authorize",
         },
     ]
@@ -519,9 +532,7 @@ def start_sso_authorization(provider: str, redirect_uri: str | None = None,
     if not cfg["client_id"]:
         raise ValueError(f"SSO provider '{provider}' is not configured (missing client id)")
     verifier, challenge = _pkce_pair()
-    redirect_uri = redirect_uri or settings.SSO_REDIRECT_URI or (
-        f"{settings.SITE_URL}/api/v1/auth/sso/{provider}/callback"
-    )
+    redirect_uri = redirect_uri or _sso_redirect_uri(provider)
     state = create_access_token(
         {"step": "sso", "provider": provider, "verifier": verifier,
          "redirect": redirect_uri, "cs": client_state or ""},
@@ -554,14 +565,16 @@ def _state_payload(state: str, provider: str) -> dict:
     return payload
 
 
-async def _exchange_code_for_tokens(provider: str, cfg: dict, code: str, verifier: str | None) -> dict:
+async def _exchange_code_for_tokens(
+    provider: str, cfg: dict, code: str, verifier: str | None,
+    redirect_uri: str | None = None,
+) -> dict:
     """Step 2 — exchange the authorization code for provider tokens."""
     data: dict = {
         "grant_type": "authorization_code",
         "code": code,
         "client_id": cfg["client_id"],
-        "redirect_uri": (settings.SSO_REDIRECT_URI
-                         or f"{settings.SITE_URL}/api/v1/auth/sso/{provider}/callback"),
+        "redirect_uri": redirect_uri or _sso_redirect_uri(provider),
     }
     if cfg.get("uses_secret"):
         secret = cfg["client_secret"]() if callable(cfg["client_secret"]) else cfg["client_secret"]
@@ -717,7 +730,9 @@ async def complete_sso_code_flow(db: AsyncSession, provider: str, code: str, sta
     """Server-side OAuth2 callback: verify state, exchange the code, upsert user."""
     payload = _state_payload(state, provider)
     cfg = _sso_config(provider)
-    tokens = await _exchange_code_for_tokens(provider, cfg, code, payload.get("verifier"))
+    tokens = await _exchange_code_for_tokens(
+        provider, cfg, code, payload.get("verifier"), payload.get("redirect"),
+    )
     profile = await _profile_from_tokens(provider, cfg, tokens)
     return await sso_login_or_register_profile(db, provider, profile)
 
@@ -729,7 +744,9 @@ async def complete_sso_code_flow_with_verifier(
     received from /authorize instead of the one embedded in the state token."""
     payload = _state_payload(state, provider)
     cfg = _sso_config(provider)
-    tokens = await _exchange_code_for_tokens(provider, cfg, code, code_verifier or payload.get("verifier"))
+    tokens = await _exchange_code_for_tokens(
+        provider, cfg, code, code_verifier or payload.get("verifier"), payload.get("redirect"),
+    )
     profile = await _profile_from_tokens(provider, cfg, tokens)
     return await sso_login_or_register_profile(db, provider, profile)
 

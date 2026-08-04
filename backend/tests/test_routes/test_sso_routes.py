@@ -24,9 +24,13 @@ async def test_sso_providers_endpoint(anon_client: AsyncClient):
 
 # ── authorize ────────────────────────────────────────────────────────────────
 
-async def test_sso_authorize_unconfigured_400(anon_client: AsyncClient):
+async def test_sso_authorize_unconfigured_400(anon_client: AsyncClient, monkeypatch):
+    # Force the provider unconfigured regardless of .env bleed (load_dotenv)
+    from app.services import auth_service
+    monkeypatch.setattr(auth_service.settings, "GOOGLE_CLIENT_ID", "")
+    monkeypatch.setattr(auth_service.settings, "GOOGLE_CLIENT_SECRET", "")
     resp = await anon_client.get("/api/v1/auth/sso/google/authorize")
-    assert resp.status_code == 400  # no GOOGLE_CLIENT_ID in local env
+    assert resp.status_code == 400  # GOOGLE_CLIENT_ID intentionally cleared
 
 
 async def test_sso_authorize_returns_pkce_url(anon_client: AsyncClient, monkeypatch):
