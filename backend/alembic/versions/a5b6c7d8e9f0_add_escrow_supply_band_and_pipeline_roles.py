@@ -54,7 +54,7 @@ def upgrade() -> None:
     # ── courier_jobs: buyer delivery flag ───────────────────────────────────
     with op.batch_alter_table("courier_jobs") as batch_op:
         batch_op.add_column(
-            sa.Column("deliver_to_buyer", sa.Boolean, nullable=False, server_default=sa.text("0")),
+            sa.Column("deliver_to_buyer", sa.Boolean, nullable=False, server_default=sa.false()),
         )
 
     # ── bulking_escrows ─────────────────────────────────────────────────────
