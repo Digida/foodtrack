@@ -33,20 +33,29 @@ def upgrade() -> None:
     op.execute("UPDATE taxonomy_items SET supply_band = 'ABUNDANT' WHERE supply_band IS NULL")
 
     # ── bulking_registers: sourcing entity ──────────────────────────────────
-    op.add_column(
-        "bulking_registers",
-        sa.Column("sourcing_entity_id", sa.Integer, sa.ForeignKey("users.id"), nullable=True, index=True),
-    )
-    op.add_column(
-        "bulking_registers",
-        sa.Column("sourcing_entity_name", sa.String(255), nullable=True),
-    )
+    # batch mode keeps this migration runnable on SQLite (dev/scratch); on
+    # PostgreSQL it executes the same ops directly.
+    with op.batch_alter_table("bulking_registers") as batch_op:
+        batch_op.add_column(
+            sa.Column(
+                "sourcing_entity_id",
+                sa.Integer,
+                sa.ForeignKey("users.id", name="fk_bulking_registers_sourcing_entity_id_users"),
+                nullable=True,
+            ),
+        )
+        batch_op.create_index(
+            "ix_bulking_registers_sourcing_entity_id", ["sourcing_entity_id"]
+        )
+        batch_op.add_column(
+            sa.Column("sourcing_entity_name", sa.String(255), nullable=True),
+        )
 
     # ── courier_jobs: buyer delivery flag ───────────────────────────────────
-    op.add_column(
-        "courier_jobs",
-        sa.Column("deliver_to_buyer", sa.Boolean, nullable=False, server_default=sa.text("0")),
-    )
+    with op.batch_alter_table("courier_jobs") as batch_op:
+        batch_op.add_column(
+            sa.Column("deliver_to_buyer", sa.Boolean, nullable=False, server_default=sa.text("0")),
+        )
 
     # ── bulking_escrows ─────────────────────────────────────────────────────
     op.create_table(
@@ -69,7 +78,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("bulking_escrows")
-    op.drop_column("courier_jobs", "deliver_to_buyer")
-    op.drop_column("bulking_registers", "sourcing_entity_name")
-    op.drop_column("bulking_registers", "sourcing_entity_id")
+    with op.batch_alter_table("courier_jobs") as batch_op:
+        batch_op.drop_column("deliver_to_buyer")
+    with op.batch_alter_table("bulking_registers") as batch_op:
+        batch_op.drop_column("sourcing_entity_name")
+        batch_op.drop_column("sourcing_entity_id")
     op.drop_column("taxonomy_items", "supply_band")

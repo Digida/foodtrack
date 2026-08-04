@@ -127,6 +127,22 @@ async def run_startup_tasks(backend_dir: Path) -> None:
     except Exception as exc:
         _record_error("migration", str(exc))
 
+    # On Postgres, seeding assumes the schema is fully migrated (queries select
+    # columns added by recent migrations).  If Alembic failed, skip seeding so
+    # we surface the migration error instead of a confusing missing-column
+    # crash.  SQLite is unaffected — its schema comes from create_all and
+    # Alembic is skipped.
+    from app.config import settings
+    if (
+        not settings.DATABASE_URL.startswith("sqlite")
+        and _state["migration"].get("status") == "error"
+    ):
+        logger.error({"msg": "Seeding skipped: migrations failed on PostgreSQL"})
+        _state["phase"] = "error"
+        _state["ready"] = True
+        _state["finished_at"] = time.time()
+        return
+
     _state["phase"] = "seeding"
     try:
         await _run_seeding()
