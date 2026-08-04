@@ -8,6 +8,7 @@ from .report_audit import (
     AuditStatus,
     Confidence,
     Severity,
+    ReportAuditTool,
 )
 from .certificate_validator import validate_certificate, CertificateValidatorTool
 from .compliance_checker import check_compliance, ComplianceCheckerTool
@@ -26,6 +27,26 @@ from .qr_code_tool import generate_qr, decode_qr, QrCodeTool
 from .barcode_tool import validate_ean13, generate_ean13, BarcodeTool
 from .weather_fetcher import fetch_weather, WeatherFetcherTool
 from .regulation_fetcher import fetch_regulations, RegulationFetcherTool
+from .bulking_planner import plan_register, BulkingPlannerTool
+from .bid_evaluator import evaluate_bid, rank_bids, BidEvaluatorTool
+from .warehouse_optimizer import recommend_warehouse, WarehouseOptimizerTool
+from .courier_budgeter import estimate_courier_budget, CourierBudgeterTool
+from .deal_facilitator import compute_deal_split, deal_readiness_check, DealFacilitatorTool
+from .job_assigner import assign_jobs, build_shift, JobAssignerTool
+from .workflow_engine import validate_transition, pipeline_stage, WorkflowEngineTool
+from .task_prioritizer import prioritize_tasks, TaskPrioritizerTool
+from .quality_inspector import verify_quality_grade, QualityInspectorTool
+from .job_availability import check_availability, JobAvailabilityTool
+from .escrow_calculator import escrow_percentage, escrow_amount, EscrowCalculatorTool
+from .escrow_release_checker import check_release, EscrowReleaseCheckerTool
+from .escrow_dispute_resolver import resolve_dispute, EscrowDisputeResolverTool
+from .escrow_reporter import escrow_report, EscrowReporterTool
+from .escrow_notifier import escrow_event_notification, EscrowNotifierTool
+from .settlement_calculator import calculate_settlement, calculate_settlement_batch, SettlementCalculatorTool
+from .settlement_aggregator import aggregate_settlements, SettlementAggregatorTool
+from .payment_validator import validate_payment_reference, PaymentValidatorTool
+from .settlement_reporter import settlement_report, SettlementReporterTool
+from .settlement_notifier import settlement_event_notification, SettlementNotifierTool
 
 __all__ = [
     "web_search",
@@ -39,6 +60,7 @@ __all__ = [
     "AuditStatus",
     "Confidence",
     "Severity",
+    "ReportAuditTool",
     "validate_certificate",
     "CertificateValidatorTool",
     "check_compliance",
@@ -78,4 +100,50 @@ __all__ = [
     "WeatherFetcherTool",
     "fetch_regulations",
     "RegulationFetcherTool",
+    "plan_register",
+    "BulkingPlannerTool",
+    "evaluate_bid",
+    "rank_bids",
+    "BidEvaluatorTool",
+    "recommend_warehouse",
+    "WarehouseOptimizerTool",
+    "estimate_courier_budget",
+    "CourierBudgeterTool",
+    "compute_deal_split",
+    "deal_readiness_check",
+    "DealFacilitatorTool",
+    "assign_jobs",
+    "build_shift",
+    "JobAssignerTool",
+    "validate_transition",
+    "pipeline_stage",
+    "WorkflowEngineTool",
+    "prioritize_tasks",
+    "TaskPrioritizerTool",
+    "verify_quality_grade",
+    "QualityInspectorTool",
+    "check_availability",
+    "JobAvailabilityTool",
+    "escrow_percentage",
+    "escrow_amount",
+    "EscrowCalculatorTool",
+    "check_release",
+    "EscrowReleaseCheckerTool",
+    "resolve_dispute",
+    "EscrowDisputeResolverTool",
+    "escrow_report",
+    "EscrowReporterTool",
+    "escrow_event_notification",
+    "EscrowNotifierTool",
+    "calculate_settlement",
+    "calculate_settlement_batch",
+    "SettlementCalculatorTool",
+    "aggregate_settlements",
+    "SettlementAggregatorTool",
+    "validate_payment_reference",
+    "PaymentValidatorTool",
+    "settlement_report",
+    "SettlementReporterTool",
+    "settlement_event_notification",
+    "SettlementNotifierTool",
 ]

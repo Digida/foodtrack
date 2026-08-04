@@ -78,7 +78,7 @@ from app.routes import (
     codes, health, cargo, verify, compliance, rates, enrichment, continuous_enrichment,
     events, telemetry, developer_portal, gov_integration, arabic_i18n,
     recalls, suppliers, insurance, monitoring, retention, tiers, esg, startup,
-    commerce,
+    commerce, ai_orchestration, earning,
 )
 
 # OpenTelemetry tracing — enabled only when opentelemetry packages are installed
@@ -279,6 +279,7 @@ async def rate_limiting_middleware(request: Request, call_next):
         "/api/v1/auth/send-otp", "/api/v1/auth/verify-otp",
         "/api/v1/verify/", "/api/v1/contact",
         "/api/v1/search", "/api/v1/search/autocomplete",
+        "/api/v1/earning",
         "/api/v1/health",
     ])
 
@@ -363,6 +364,8 @@ app.include_router(esg.router, prefix="/api/v1")
 app.include_router(monitoring.router)
 app.include_router(startup.router, prefix="/api/v1")
 app.include_router(commerce.router, prefix="/api/v1")
+app.include_router(earning.router, prefix="/api/v1")
+app.include_router(ai_orchestration.router, prefix="/api/v1")
 
 from pathlib import Path as _Path
 _FRONTEND_DIR = _Path(__file__).resolve().parent.parent.parent / "frontend"

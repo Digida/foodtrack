@@ -33,6 +33,7 @@ from app.models.commerce import (
     BulkingRegister, BulkingContact, BulkingBid, WarehouseBooking, CourierJob,
     Deal, Payment, Settlement, BulkingJobAssignment, PackingRecord, BulkingEscrow,
 )
+from app.models.ai_memory import AiMemory, MemoryStrategy
 
 __all__ = [
     "Tenant",
@@ -70,4 +71,5 @@ __all__ = [
     "BulkingRegister", "BulkingContact", "BulkingBid", "WarehouseBooking",
     "CourierJob", "Deal", "Payment", "Settlement",
     "BulkingJobAssignment", "PackingRecord", "BulkingEscrow",
+    "AiMemory", "MemoryStrategy",
 ]

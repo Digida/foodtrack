@@ -6,7 +6,10 @@ and torn down after.
 """
 import asyncio
 import sys
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
+
+# Scratch script (not a pytest test) that hits a live server at import time.
+collect_ignore = ["fix_auth_test.py"]
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -18,9 +21,9 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
+from app.models.taxonomy import Taxonomy, TaxonomyItem, TaxonomyNode
 from app.models.user import User, UserRole
-from app.services.auth_service import hash_password, create_access_token
-from app.models.taxonomy import Taxonomy, TaxonomyNode, TaxonomyItem
+from app.services.auth_service import create_access_token, hash_password
 
 TEST_DATABASE_URL = "sqlite+aiosqlite://"
 

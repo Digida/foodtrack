@@ -138,6 +138,7 @@
   Router.add('settings', checkAuth(Pages.settings));
   Router.add('food-items', Pages.foodItems);
   Router.add('food-item/:id', Pages.foodItemDetail);
+  Router.add('earning', Pages.earning);
   Router.add('cargo-tracking', checkAuth(Pages.cargoTracking));
   Router.add('cargo-tracking/:id', checkAuth(Pages.cargoTrackingDetail));
 

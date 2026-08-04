@@ -387,6 +387,11 @@ a:hover { text-decoration: underline; }
 .stat-card .stat-value { font-size: 36px; font-weight: 800; color: var(--primary); }
 .stat-card .stat-label { font-size: 13px; color: var(--text-light); margin-top: 4px; }
 
+/* Earning opportunities (public browse) */
+.opp-tab { border: 1px solid var(--border); background: var(--bg-card); color: var(--text-light); }
+.opp-tab.active { background: var(--primary); border-color: var(--primary); color: var(--text-inverse); }
+.opp-card { margin-bottom: 16px; }
+
 /* Table */
 .table-container { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -513,6 +518,8 @@ tr:hover td { background: #f1f5f3; }
 
 @media (max-width: 767px) {
   .mobile-toggle { display: flex; align-items: center; justify-content: center; }
+  .pub-nav.has-topbar .pub-links,
+  .pub-nav.has-topbar .pub-auth { top: calc(var(--nav-height) + var(--header-height)); }
   .sidebar {
     position: fixed; top: 0; bottom: 0; height: 100vh;
     transform: translateX(-100%); transition: transform 0.3s ease; z-index: 102;

@@ -1,7 +1,7 @@
 import logging
 import time
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import select, or_, and_, func, String
@@ -579,6 +579,15 @@ async def search_collections(
     count_q = select(func.count()).select_from(q.subquery())
     total = (await db.execute(count_q)).scalar() or 0
     items = (await db.execute(q.offset(offset).limit(limit).order_by(Collection.sort_order))).scalars().all()
+    counts = {}
+    if items:
+        ids = [c.id for c in items]
+        count_rows = await db.execute(
+            select(CollectionItem.collection_id, func.count())
+            .where(CollectionItem.collection_id.in_(ids))
+            .group_by(CollectionItem.collection_id)
+        )
+        counts = dict(count_rows.all())
     result = []
     for c in items:
         score = _score_field(term_lower, c.name, 6)
@@ -586,7 +595,7 @@ async def search_collections(
             "id": c.id, "name": c.name, "slug": c.slug,
             "description": c.description, "image_url": c.image_url,
             "is_ai_generated": c.is_ai_generated,
-            "item_count": len(c.items) if hasattr(c, 'items') else 0,
+            "item_count": counts.get(c.id, 0),
             "_score": score,
         })
     return total, result
@@ -693,7 +702,7 @@ async def autocomplete_search(db: AsyncSession, q: str, limit: int = 8, include_
 async def get_search_analytics(
     db: AsyncSession, days: int = 7, limit: int = 50,
 ) -> dict:
-    cutoff = datetime.now(timezone.utc)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     top_queries = await db.execute(
         select(SearchLog.query, func.count().label("cnt"))
         .where(SearchLog.created_at >= cutoff)

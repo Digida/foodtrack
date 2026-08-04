@@ -14,6 +14,7 @@ window.I18n = (() => {
       'nav.home': 'Home',
       'nav.bulking': 'Bulking',
       'nav.food-items': 'Food Items',
+      'nav.earning': 'Earning',
       'nav.verify': 'Verify',
       'nav.cargo-tracking': 'Cargo Tracking',
       'nav.about': 'About',
@@ -38,6 +39,7 @@ window.I18n = (() => {
       'sidebar.collections': 'Collections',
       'sidebar.settings': 'Settings',
       'sidebar.guest': 'Guest',
+      'sidebar.earning-opportunities': 'Earning opportunities',
       'sidebar.quick-search': 'Quick search items, batches...',
 
       // Topbar / layout
@@ -119,6 +121,7 @@ window.I18n = (() => {
       'nav.home': 'الرئيسية',
       'nav.bulking': 'التجميع والاستثمار',
       'nav.food-items': 'الأصناف الغذائية',
+      'nav.earning': 'الكسب',
       'nav.verify': 'تحقق',
       'nav.cargo-tracking': 'تتبع الشحنات',
       'nav.about': 'عن المنصة',
@@ -143,6 +146,7 @@ window.I18n = (() => {
       'sidebar.collections': 'المجموعات',
       'sidebar.settings': 'الإعدادات',
       'sidebar.guest': 'زائر',
+      'sidebar.earning-opportunities': 'فرص الكسب',
       'sidebar.quick-search': 'بحث سريع عن الأصناف والدفعات…',
 
       // Topbar / layout

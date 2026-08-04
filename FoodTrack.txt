@@ -27,3 +27,14 @@ Government programmes
 Premium food brands
 The business model combines Software-as-a-Service (SaaS), enterprise licensing, digital certification,
 implementation services, and data analytics to generate recurring revenue.
+
+
+FINAL ADJUSTMENTS
+1. Change App to Global implementation - Theme adjust to National Flag and Language, and national Export-import regulations are loaded. Also adjust from only import based functionalities and accommodate exports.
+
+2. MAG - DAG - RAG - fallbacks (in that regression order) in AI implementation of utility of the 20 tools. Add 20 new tools to make 40.
+
+Please respect what is already in place, especailly the database relations with regard to migrations and sedings, because local dev uses sqlite but production uses postgres.
+When in phone size view, some menu items are not loaded in the burger. like buliking and the items.
+Also We need to expose a new link "Earning" that allows unauthed users to browse tasks and job opportunites that are generated from the various pipelines. This means also creating a side bar item "Earning opportunities" that allows unauthed users browse the same. Auth is however required to partake.
+

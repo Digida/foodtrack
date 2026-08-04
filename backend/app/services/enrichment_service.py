@@ -27,9 +27,13 @@ async def enrich_collection_from_feed(db: AsyncSession, user: User, collection_i
     await db.commit()
 
     try:
-        feeds = await db.execute(select(FeedSource).where(FeedSource.collection_id == collection_id))
+        feed_rows = []
+        if collection.feed_source_id:
+            feed_rows = (
+                await db.execute(select(FeedSource).where(FeedSource.id == collection.feed_source_id))
+            ).scalars().all()
         items_added = 0
-        for feed in feeds.scalars().all():
+        for feed in feed_rows:
             try:
                 content = read_url(feed.url)
                 items_added += 1
@@ -111,9 +115,6 @@ async def suggest_taxonomy_nodes(db: AsyncSession, user: User, item_id: int) -> 
     results = web_search(query, max_results=5)
     results_list = results.get("results", []) if isinstance(results, dict) else (results or [])
 
-    existing_nodes = await db.execute(select(TaxonomyNode.name, TaxonomyNode.node_type).distinct())
-    existing_map = {name.lower(): ntype for name, ntype in existing_nodes.all()}
-
     suggestions = []
     for r in results_list[:3]:
         suggestion = EnrichmentSuggestion(
@@ -145,10 +146,10 @@ async def auto_categorize_collection(db: AsyncSession, user: User, collection_id
     categories = {}
     for ci in items.scalars().all():
         tax_item = await db.get(TaxonomyItem, ci.item_id)
-        if tax_item and tax_item.taxonomy_node_id:
-            node = await db.get(TaxonomyNode, tax_item.taxonomy_node_id)
+        if tax_item and tax_item.node_id:
+            node = await db.get(TaxonomyNode, tax_item.node_id)
             if node:
-                cat = node.node_type or "uncategorized"
+                cat = node.name or "uncategorized"
                 categories[cat] = categories.get(cat, 0) + 1
 
     suggestion = EnrichmentSuggestion(
@@ -176,9 +177,16 @@ async def suggest_collection_items(db: AsyncSession, user: User, collection_id: 
     )
     existing_ids = {row[0] for row in existing.all()}
 
+    node_rows = await db.execute(
+        select(TaxonomyItem.node_id).where(TaxonomyItem.id.in_(existing_ids))
+    )
+    node_ids = {row[0] for row in node_rows.all() if row[0]}
+    if not node_ids:
+        return {"collection_id": collection_id, "suggestions_count": 0, "suggestions": []}
+
     other_items = await db.execute(
         select(TaxonomyItem.id, TaxonomyItem.common_name)
-        .where(TaxonomyItem.category == collection.category)
+        .where(TaxonomyItem.node_id.in_(node_ids))
         .limit(20)
     )
 
@@ -188,7 +196,7 @@ async def suggest_collection_items(db: AsyncSession, user: User, collection_id: 
             suggestion = EnrichmentSuggestion(
                 entity_type="collection", entity_id=collection_id,
                 suggestion_type="suggest_item",
-                title=f"Add {name} to {collection.name}", description=f"Item {name} shares category {collection.category} with this collection",
+                title=f"Add {name} to {collection.name}", description=f"Item {name} shares a taxonomy node with this collection",
                 confidence="high", status="open", created_by=user.id,
             )
             db.add(suggestion)
@@ -251,10 +259,13 @@ async def refresh_collections_schedule(db: AsyncSession) -> dict:
         refreshed = 0
         for coll in collections.scalars().all():
             try:
-                feeds = await db.execute(select(FeedSource).where(FeedSource.collection_id == coll.id))
-                for feed in feeds.scalars().all():
-                    read_url(feed.url)
-                    refreshed += 1
+                if not coll.feed_source_id:
+                    continue
+                feed = await db.get(FeedSource, coll.feed_source_id)
+                if not feed or not feed.url:
+                    continue
+                read_url(feed.url)
+                refreshed += 1
             except Exception:
                 pass
 

@@ -69,7 +69,7 @@ async def enrich_from_web(db: AsyncSession, user: User, item_id: int) -> dict:
         pass
 
     try:
-        await fetch_weather(location=item.origin_region or "global")
+        await fetch_weather(location=item.local_uses or item.common_name or "global")
     except Exception:
         pass
 
@@ -122,20 +122,15 @@ async def detect_anomalies(db: AsyncSession, user: User, item_id: int) -> dict:
         select(WarehouseItem).where(WarehouseItem.item_id == item_id)
     )
     for wi in rows.scalars().all():
-        if wi.temperature_celsius is not None:
-            if wi.temperature_celsius > 8 and wi.temperature_celsius < 60:
-                pass
-            elif wi.temperature_celsius >= 60:
-                anomalies.append({"type": "temperature_warning", "severity": "high", "detail": f"WarehouseItem {wi.id}: temp {wi.temperature_celsius}°C exceeds safe range", "entity": "WarehouseItem", "entity_id": wi.id})
-            elif wi.temperature_celsius < -10:
-                anomalies.append({"type": "temperature_warning", "severity": "medium", "detail": f"WarehouseItem {wi.id}: temp {wi.temperature_celsius}°C below freezing threshold", "entity": "WarehouseItem", "entity_id": wi.id})
+        if wi.quantity is not None and wi.quantity < 0:
+            anomalies.append({"type": "negative_stock", "severity": "high", "detail": f"WarehouseItem {wi.id}: negative quantity {wi.quantity}", "entity": "WarehouseItem", "entity_id": wi.id})
 
     rows = await db.execute(
         select(ShipmentBatch).where(ShipmentBatch.item_id == item_id)
     )
     for sb in rows.scalars().all():
-        if sb.status.value in ("delayed", "cancelled"):
-            anomalies.append({"type": "shipment_anomaly", "severity": "high", "detail": f"ShipmentBatch {sb.id} is {sb.status.value}", "entity": "ShipmentBatch", "entity_id": sb.id})
+        if sb.item_shipment_status is not None and sb.item_shipment_status.value in ("exception",):
+            anomalies.append({"type": "shipment_anomaly", "severity": "high", "detail": f"ShipmentBatch {sb.id} is {sb.item_shipment_status.value}", "entity": "ShipmentBatch", "entity_id": sb.id})
 
     rows = await db.execute(
         select(ShipmentTrackingEvent).where(ShipmentTrackingEvent.item_id == item_id)
@@ -149,8 +144,11 @@ async def detect_anomalies(db: AsyncSession, user: User, item_id: int) -> dict:
     )
     now = datetime.now(timezone.utc)
     for c in certs.scalars().all():
-        if c.expiry_date and c.expiry_date < now:
-            anomalies.append({"type": "expired_certificate", "severity": "high", "detail": f"Certificate {c.id} ({c.type.value}) expired on {c.expiry_date.date()}", "entity": "Certificate", "entity_id": c.id})
+        exp = c.expiry_date
+        if exp is not None and exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if exp is not None and exp < now:
+            anomalies.append({"type": "expired_certificate", "severity": "high", "detail": f"Certificate {c.id} ({c.type.value}) expired on {exp.date()}", "entity": "Certificate", "entity_id": c.id})
         elif c.status.value in ("rejected", "revoked"):
             anomalies.append({"type": "certificate_status", "severity": "medium", "detail": f"Certificate {c.id} ({c.type.value}) status is {c.status.value}", "entity": "Certificate", "entity_id": c.id})
 
@@ -158,8 +156,8 @@ async def detect_anomalies(db: AsyncSession, user: User, item_id: int) -> dict:
         select(ItemInventory).where(ItemInventory.item_id == item_id)
     )
     for inv_rec in inv.scalars().all():
-        if inv_rec.quantity_on_hand < 0:
-            anomalies.append({"type": "negative_inventory", "severity": "high", "detail": f"ItemInventory {inv_rec.id} has negative stock: {inv_rec.quantity_on_hand}", "entity": "ItemInventory", "entity_id": inv_rec.id})
+        if inv_rec.total_quantity < 0:
+            anomalies.append({"type": "negative_inventory", "severity": "high", "detail": f"ItemInventory {inv_rec.id} has negative stock: {inv_rec.total_quantity}", "entity": "ItemInventory", "entity_id": inv_rec.id})
 
     audit = ReportAudit()
     audit_result = audit.extract_figures(item.common_name)

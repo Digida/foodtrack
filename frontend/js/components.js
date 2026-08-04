@@ -242,6 +242,7 @@ const UI = {
         UI.el('a', { href: '#home', className: 'pub-link ' + isActive('#home') }, t('nav.home')),
         UI.el('a', { href: '#bulking', className: 'pub-link ' + (curHash.startsWith('#bulking') ? 'active' : '') }, t('nav.bulking')),
         UI.el('a', { href: '#food-items', className: 'pub-link ' + (curHash.startsWith('#food-items') || curHash.startsWith('#food-item') ? 'active' : '') }, t('nav.food-items')),
+        UI.el('a', { href: '#earning', className: 'pub-link ' + (curHash.startsWith('#earning') ? 'active' : '') }, t('nav.earning')),
         ...(loggedIn ? [
           UI.el('a', { href: '#verify', className: 'pub-link ' + isActive('#verify') }, t('nav.verify')),
           UI.el('a', { href: '#cargo-tracking', className: 'pub-link ' + (curHash.startsWith('#cargo-tracking') ? 'active' : '') }, t('nav.cargo-tracking')),
@@ -260,8 +261,10 @@ const UI = {
       toggle
     );
     toggle.addEventListener('click', () => {
-      document.querySelector('.pub-links').classList.toggle('open');
-      document.querySelector('.pub-auth').classList.toggle('open');
+      const linksOpen = document.querySelector('.pub-links').classList.toggle('open');
+      document.querySelector('.pub-auth').classList.toggle('open', linksOpen);
+      document.querySelector('.sidebar')?.classList.remove('open');
+      document.querySelector('.sidebar-overlay')?.classList.remove('open');
     });
     if (UI._navCloseHandler) window.removeEventListener('hashchange', UI._navCloseHandler);
     UI._navCloseHandler = () => {
@@ -279,6 +282,7 @@ const UI = {
     const nav = [
       { icon: '\u{1F4CA}', label: t('nav.dashboard'), href: '#dashboard' },
       { icon: '\u{1F69B}', label: t('nav.bulking'), href: '#bulking' },
+      { icon: '\u{1F4B0}', label: t('sidebar.earning-opportunities'), href: '#earning' },
       { icon: '\u{1F50D}', label: t('sidebar.search'), href: '#search' },
       { icon: '\u{1F33E}', label: t('nav.food-items'), href: '#food-items' },
       { icon: '\u{1F4E6}', label: t('sidebar.products'), href: '#products' },
@@ -366,6 +370,8 @@ const UI = {
     const toggleSidebar = () => {
       document.querySelector('.sidebar')?.classList.toggle('open');
       document.querySelector('.sidebar-overlay')?.classList.toggle('open');
+      document.querySelector('.pub-links')?.classList.remove('open');
+      document.querySelector('.pub-auth')?.classList.remove('open');
     };
     const header = UI.el('div', { className: 'topbar' },
       UI.el('button', { className: 'mobile-toggle', html: '&#9776;', onClick: toggleSidebar }),
@@ -382,8 +388,10 @@ const UI = {
     );
     const pageContent = UI.el('div', { className: 'page-content', id: 'page-content' });
     const main = UI.el('div', { className: 'main-content' }, header, pageContent);
+    const nav = UI.buildMainNav();
+    nav.classList.add('has-topbar');
     const wrapper = UI.el('div', { className: 'app-shell' },
-      UI.buildMainNav(),
+      nav,
       UI.el('div', { className: 'app-body' },
         UI.buildSidebar(),
         main

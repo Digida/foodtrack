@@ -150,6 +150,8 @@ async def verify_certificate_chain(db: AsyncSession, item_id: int) -> dict:
         if c.get("expiry_date"):
             try:
                 exp = datetime.fromisoformat(c["expiry_date"].replace("Z", "+00:00"))
+                if exp.tzinfo is None:
+                    exp = exp.replace(tzinfo=timezone.utc)
                 if exp < now:
                     expired_chain.append(c["certificate_id"])
             except (ValueError, TypeError):
@@ -315,7 +317,10 @@ async def notify_expiring_certificates(db: AsyncSession) -> dict:
 
     notified = []
     for cert in certs:
-        days_left = (cert.expiry_date - now).days
+        exp = cert.expiry_date
+        if exp is not None and exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        days_left = (exp - now).days
         try:
             await send_notification(
                 recipient="admin@foodtrack.local",
@@ -323,7 +328,7 @@ async def notify_expiring_certificates(db: AsyncSession) -> dict:
                 message=(
                     f"Certificate {cert.certificate_id} ({cert.type.value}) "
                     f"issued by {cert.issuer_name} expires in {days_left} days "
-                    f"on {cert.expiry_date.date()}. "
+                    f"on {exp.date()}. "
                     f"Please renew before expiry."
                 ),
                 channel="email",
@@ -331,7 +336,7 @@ async def notify_expiring_certificates(db: AsyncSession) -> dict:
             notified.append({
                 "certificate_id": cert.certificate_id,
                 "type": cert.type.value,
-                "expiry_date": str(cert.expiry_date.date()) if cert.expiry_date else None,
+                "expiry_date": str(exp.date()) if exp else None,
                 "days_left": days_left,
             })
         except Exception:

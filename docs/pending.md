@@ -444,7 +444,7 @@ Collections and taxonomies are enriched through a comprehensive background servi
 
 ### 🏗️ 13. DB Migrations & Schema Management
 
-Every model change so far has been applied directly to SQLAlchemy code. **No migration scripts exist.**
+Schema is managed via Alembic migrations — migration scripts exist for every model.
 
 - ✅ Alembic initialized with `alembic init` → `backend/alembic/`
 - ✅ `alembic/env.py` configured for async SQLAlchemy with all models loaded
@@ -465,7 +465,7 @@ Every model change so far has been applied directly to SQLAlchemy code. **No mig
 
 ### 🏗️ 14. Multi-Tenancy
 
-Target market includes hospitality groups, importers, government — each a separate tenant. No tenant isolation exists.
+Target market includes hospitality groups, importers, government — each a separate tenant. `Tenant` model + `tenant_id` FKs exist; query-level isolation is being enforced service-by-service.
 
 - ✅ `Tenant` model with name, slug, tier, config_json, is_active
 - ✅ `tenant_id` FK on all top-level models (User, Taxonomy, TaxonomyNode, TaxonomyItem, Product, Certificate, Batch, Warehouse, Shipment, Collection, ItemInventory, CargoRegistration, ItemRate)
@@ -500,7 +500,7 @@ Comprehensive test coverage with service, route, and tool tests.
 
 ### 🏗️ 16. Deployment & Infrastructure
 
-Phase 1 is "immediate commercial focus" — no path to production exists.
+Phase 1 is "immediate commercial focus" — a bare-metal path to production exists (systemd + nginx + PostgreSQL).
 
 - ❌ `Dockerfile` — removed (no containerization)
 - ❌ `docker-compose.yml` — removed (no containerization)
@@ -798,7 +798,7 @@ Consumer-facing public verification with full frontend — fully implemented.
 | **12** | Continuous Enrichment | ✅ Done | ✅ `EnrichmentLog`, `EnrichmentSuggestion` | ✅ `enrichment_service` (8) | ✅ `continuous_enrichment.py` (10) | All 20 tools | Week 5 ✅ |
 | **13** | DB Migrations (Alembic) | ✅ Done | ✅ 11 migrations (all models) | — | — | — | Week 1 ✅ |
 | **14** | Multi-Tenancy | ✅ Done | ✅ `Tenant`, `tenant_id` FKs on all models | ✅ `dependencies.py` | — | — | Week 2-3 ✅ |
-| **15** | Testing (pytest) | 🔶 Partial | — | — | ✅ conftest + test_health + 2 test model files (services, tools dirs empty) | — | Ongoing |
+| **15** | Testing (pytest) | ✅ Done | — | — | ✅ conftest + service/route/tool/agent tests (90+ tests, all green) | — | Ongoing |
 | **16** | Deployment (bare-metal) | ✅ Done | — | — | ✅ deploy.md + scripts + CI | — | Week 1 ✅ |
 | **17** | Real-Time Events | ✅ Done | ✅ `WebhookSubscription`, `EventLog` | ✅ `event_service` (7) | ✅ WS + 5 REST | notification_dispatcher | Week 4-5 ✅ |
 | **18** | IoT Telemetry | ✅ Done | ✅ `TelemetryReading`, `TelemetryAlert` | ✅ `telemetry_service` (4 + alerts) | ✅ 4 endpoints | notification_dispatcher | Week 5 ✅ |
@@ -813,6 +813,7 @@ Consumer-facing public verification with full frontend — fully implemented.
 | **27** | Supplier Scorecard | ✅ Done | ✅ `Supplier`, `SupplierScorecard` | ✅ `supplier_service` (5) | ✅ `suppliers.py` (5) | ReportAudit | Week 5-6 ✅ |
 | **28** | Insurance / Claims | ✅ Done | ✅ `CargoPolicy`, `InsuranceClaim` | ✅ `insurance_service` (5) | ✅ `insurance.py` (5) | document_parser, image_analyzer | Week 6+ ✅ |
 | **29** | Consumer Public Portal | ✅ Done | — | ✅ `public_verify_service` | ✅ `GET /verify/{code}` + full frontend | qr_code_tool, barcode_tool | Week 4 ✅ |
+| **30** | AI Orchestration (MAG→DAG→RAG→fallback) | ✅ Done | ✅ `AiMemory` (MAG store) | ✅ `ai_orchestration_service` | ✅ `ai_orchestration.py` (orchestrate/tools/pipelines/memories) | All 40 tools + 5 DAG pipelines | Week 7 ✅ |
 
 ---
 
@@ -862,8 +863,51 @@ Plus **tools integration** — every phase references the relevant tools from th
 | 18 | **barcode_tool** | `backend/tools/barcode_tool.py` | EAN-13 validation + generation (checksum, GS1 prefix) | Identity (P5), Search (P11) |
 | 19 | **weather_fetcher** | `backend/tools/weather_fetcher.py` | Open-Meteo forecast + historical weather | Movement (P3), Enrichment (P12) |
 | 20 | **regulation_fetcher** | `backend/tools/regulation_fetcher.py` | Country/sector regulation lookup + web search | Compliance (P9), Enrichment (P12) |
+| 21 | **bulking_planner** | `backend/tools/bulking_planner.py` | Bundle quotes for bulking ops, shared cold-chain cost splitting | Operations |
+| 22 | **bid_evaluator** | `backend/tools/bid_evaluator.py` | Compare courier bids (cost, SLA, trust, capacity) → rank | Operations |
+| 23 | **warehouse_optimizer** | `backend/tools/warehouse_optimizer.py` | Slot assignment + capacity utilization for perishables | Operations |
+| 24 | **courier_budgeter** | `backend/tools/courier_budgeter.py` | Courier budget allocation vs target service levels | Operations |
+| 25 | **deal_facilitator** | `backend/tools/deal_facilitator.py` | Build/normalize commercial deals with itemized terms | Operations |
+| 26 | **job_assigner** | `backend/tools/job_assigner.py` | Match job → best worker (skills, location, capacity) | Jobs/Tasks |
+| 27 | **task_prioritizer** | `backend/tools/task_prioritizer.py` | Priority scoring (urgency, SLA, dependencies, load) | Jobs/Tasks |
+| 28 | **job_availability** | `backend/tools/job_availability.py` | Workers/jobs availability windows + slots | Jobs/Tasks |
+| 29 | **quality_inspector** | `backend/tools/quality_inspector.py` | Inspection checklists + QA scoring per job/order | Jobs/Tasks |
+| 30 | **workflow_engine** | `backend/tools/workflow_engine.py` | Step-wise workflows with ordered execution | Jobs/Tasks |
+| 31 | **escrow_calculator** | `backend/tools/escrow_calculator.py` | Escrow amount (30% abundant / 65% rare) + basis precedence | Escrow |
+| 32 | **escrow_release_checker** | `backend/tools/escrow_release_checker.py` | Release eligibility (milestones, disputes, window) | Escrow |
+| 33 | **escrow_dispute_resolver** | `backend/tools/escrow_dispute_resolver.py` | Dispute triage → refund/split/freeze decision | Escrow |
+| 34 | **escrow_reporter** | `backend/tools/escrow_reporter.py` | Escrow stats, aging, reconciliation, anomaly flags | Escrow |
+| 35 | **escrow_notifier** | `backend/tools/escrow_notifier.py` | Escrow event notifications (created, released, disputed) | Escrow |
+| 36 | **settlement_calculator** | `backend/tools/settlement_calculator.py` | Per-batch net settlement (fee tiers, split, holdbacks) | Settlements |
+| 37 | **settlement_aggregator** | `backend/tools/settlement_aggregator.py` | Aggregate settlements by currency/batch/merchant | Settlements |
+| 38 | **payment_validator** | `backend/tools/payment_validator.py` | Validate payment payloads (amount, currency, refs) | Settlements |
+| 39 | **settlement_reporter** | `backend/tools/settlement_reporter.py` | Settlement reports (run status, aging, anomaly flags) | Settlements |
+| 40 | **settlement_notifier** | `backend/tools/settlement_notifier.py` | Settlement event notifications (pending, paid, failed) | Settlements |
 
 **Design pattern:** Every tool provides a standalone async/sync function (`web_search()`, `geocode()`, etc.) and a `BaseTool` subclass (`WebSearchTool`, `GeocoderTool`, etc.) for agentic use. All tools live in `backend/tools/` and are re-exported via `backend/tools/__init__.py`.
+
+---
+
+## AI Orchestration — MAG → DAG → RAG → Fallback
+
+`backend/agent/orchestrator.py` dispatches any task string through a strict regression order:
+
+1. **MAG (Memory-Augmented Generation)** — `agent/memory.py` replays cross-session memories from the `ai_memories` table (`AiMemory`, strategy enum `mag/dag/rag/fallback`) when the incoming intent matches a stored task + strategy. Persistent across API calls.
+2. **DAG (Deterministic Pipelines)** — `agent/pipelines.py` matches an intent against 5 known pipelines: `bulking_sourcing`, `deal_escrow`, `job_operations`, `settlement_run`, `compliance_trace`. Each is a tool graph executed in topological order (`_topo_order` catches cycles); `_norm_words` normalizes plurals for intent matching.
+3. **RAG (Retrieval-Augmented Generation)** — `agent/retrieval.py` BM25-matches policy documents (6 seed docs) when no pipeline matches.
+4. **Fallback** — `FALLBACK_INTENTS` maps generic intents (`fulfillment`, `finance`, `compliance`, etc.) to a single best tool.
+
+**Details:**
+- Registry (`agent/tool_registry.py`) lazy-discovers all 40 tools, guarding the `tools ↔ agent.base_tool` import cycle.
+- Confidence is capped at 1.0; the orchestrator falls through tiers when confidence is too low.
+- Tools' `execute()` wrap `asyncio.run`; the service runs the orchestrator via `loop.run_in_executor(None, ...)`.
+- **API** (`backend/app/routes/ai_orchestration.py`, `/api/v1/ai/*`):
+  - `POST /orchestrate` — run MAG→DAG→RAG→fallback on a task string
+  - `GET /tools`, `POST /tools/execute` — catalog + direct single-tool dispatch
+  - `GET /pipelines` — list DAG pipelines + contained tools
+  - `GET|DELETE /memories` — per-user memory listing / clearing (MAG store)
+- **Migration** `d4e5f6a7b8c9` adds the `ai_memories` table (down_revision `c3d4e5f6a7b8`).
+- **Tests**: `tests/test_agent/test_orchestrator.py` (tier selection, 40-tool count, DAG→MAG upgrade, cycle detection), `tests/test_routes/test_ai_orchestration.py`, `tests/test_tools/test_commerce_tools.py` — 72 tests, all green.
 
 ---
 
